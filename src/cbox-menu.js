@@ -52,7 +52,8 @@ dc.cboxMenu = function (parent, chartGroup) {
     _chart._doRender = function () {
         return _chart._doRedraw();
     };
-/*  IS THIS NEEDED?
+    /*
+    // IS THIS NEEDED?
     // Fixing IE 11 crash when redrawing the chart
     // see here for list of IE user Agents :
     // http://www.useragentstring.com/pages/useragentstring.php?name=Internet+Explorer
@@ -61,7 +62,7 @@ dc.cboxMenu = function (parent, chartGroup) {
     if (ua.indexOf('Trident/') > 0 && ua.indexOf('MSIE') === -1) {
         _chart.redraw = _chart.render;
     }
-*/
+    */
     _chart._doRedraw = function () {
         _chart.select('ul').remove();
         _cbox = _chart.root()
@@ -69,15 +70,20 @@ dc.cboxMenu = function (parent, chartGroup) {
             .classed(GROUP_CSS_CLASS, true);
         renderOptions();
 
-        // select the option(s) corresponding to current filter(s)
         if (_chart.hasFilter() && _multiple) {
             _cbox.selectAll('input')
-                 .property('checked', function (d) {
-                    return d && _chart.filters().indexOf(String(_chart.keyAccessor()(d))) >= 0;
+                .property('checked', function (d) {
+                    // adding `false` avoids failing test cases in phantomjs
+                    return d && _chart.filters().indexOf(String(_chart.keyAccessor()(d))) >= 0 || false;
                 });
         } else if (_chart.hasFilter()) {
-            _cbox.select('input[value="' + _chart.filter() + '"]')
-                .property('checked', true);
+            _cbox.selectAll('input')
+                .property('checked', function (d) {
+                    if (!d) {
+                        return false;
+                    }
+                    return _chart.keyAccessor()(d) === _chart.filter();
+                });
         }
         return _chart;
     };
@@ -89,9 +95,13 @@ dc.cboxMenu = function (parent, chartGroup) {
             return _chart.keyAccessor()(d);
         });
 
-        options.enter()
-        .append('li')
-            .classed(ITEM_CSS_CLASS, true);
+        options.exit().remove();
+
+        options = options.enter()
+                .append('li')
+                .classed(ITEM_CSS_CLASS, true)
+            .merge(options);
+
         options
             .append('input')
             .attr('type', _inputType)
@@ -107,6 +117,7 @@ dc.cboxMenu = function (parent, chartGroup) {
             })
             .text(_chart.title());
 
+        // 'all' option
         if (_multiple) {
             _cbox
             .append('li')
@@ -115,7 +126,6 @@ dc.cboxMenu = function (parent, chartGroup) {
             .text(_promptText)
             .on('click', onChange);
         } else {
-            // 'all' option
             var li = _cbox.append('li');
             li.append('input')
                 .attr('type', _inputType)
@@ -132,7 +142,6 @@ dc.cboxMenu = function (parent, chartGroup) {
                 .text(_promptText);
         }
 
-        options.exit().remove();
         _cbox
             .selectAll('li.' + ITEM_CSS_CLASS)
             .sort(_order);
@@ -143,8 +152,9 @@ dc.cboxMenu = function (parent, chartGroup) {
 
     function onChange (d, i) {
         var values,
-        target = d3.select(d3.event.target),
-        options;
+            target = d3.select(d3.event.target),
+            options;
+
         if (!target.datum()) {
             values = _promptValue || null;
         } else {
@@ -154,7 +164,7 @@ dc.cboxMenu = function (parent, chartGroup) {
                     return this.checked;
                 }
             });
-            values = options[0].map(function (option) {
+            values = options.nodes().map(function (option) {
                 return option.value;
             });
             // check if only prompt option is selected

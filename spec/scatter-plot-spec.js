@@ -1,4 +1,4 @@
-/* global appendChartID, comparePaths, loadDateFixture, makeDate */
+/* global appendChartID, comparePaths, loadDateFixture, makeDate, simulateChart2DBrushing */
 describe('dc.scatterPlot', function () {
     var id, chart;
     var data, group, dimension;
@@ -15,7 +15,7 @@ describe('dc.scatterPlot', function () {
         chart.dimension(dimension)
             .group(group)
             .width(500).height(180)
-            .x(d3.scale.linear().domain([0, 70]))
+            .x(d3.scaleLinear().domain([0, 70]))
             .symbolSize(10)
             .nonemptyOpacity(0.9)
             .excludedSize(2)
@@ -81,7 +81,7 @@ describe('dc.scatterPlot', function () {
                 // native size is 3 square pixels, so to get size N, multiply by sqrt(N)/3
                 var m = size.call(this, d, i);
                 m = Math.sqrt(m) / 3;
-                var path = d3.svg.line()
+                var path = d3.line()
                         .x(function (d) {
                             return d[0] * m;
                         })
@@ -100,7 +100,7 @@ describe('dc.scatterPlot', function () {
                 if (!arguments.length) {
                     return size;
                 }
-                size = d3.functor(_);
+                size = typeof _ === 'function' ? _ : dc.utils.constant(_);
                 return symbol;
             };
             return symbol;
@@ -125,10 +125,6 @@ describe('dc.scatterPlot', function () {
                 expect(chart.selectAll('rect.bar title').empty()).toBeTruthy();
             });
         });
-
-        function nthSymbol (i) {
-            return d3.select(chart.selectAll('path.symbol')[0][i]);
-        }
 
         describe('filtering the chart', function () {
             var otherDimension;
@@ -223,15 +219,62 @@ describe('dc.scatterPlot', function () {
             filteringAnotherDimension();
         });
 
+        function removeEmptyBins (sourceGroup) {
+            return {
+                all: function () {
+                    return sourceGroup.all().filter(function (d) {
+                        //return Math.abs(d.value) > 0.00001; // if using floating-point numbers
+                        return d.value !== 0; // if integers only
+                    });
+                }
+            };
+        }
+
+        describe('with empty bins removed', function () {
+            var otherDimension;
+            beforeEach(function () {
+                chart.group(removeEmptyBins(group))
+                    .render();
+                otherDimension = data.dimension(function (d) { return [+d.value, +d.nvalue]; });
+                var ff = dc.filters.RangedTwoDimensionalFilter([[22, -3], [44, 2]]).isFiltered;
+                otherDimension.filterFunction(ff);
+                chart.redraw();
+            });
+
+            it('should only contain the included points', function () {
+                var emptyPoints = symbolsMatching(function () { return true; });
+                expect(emptyPoints.length).toBe(2);
+            });
+            it('should show the included points', function () {
+                var shownPoints = symbolsOfRadius(10); // test symbolSize
+                expect(shownPoints.length).toBe(2);
+                expect(shownPoints[0].key).toEqual([22, -2]);
+                expect(shownPoints[1].key).toEqual([33, 1]);
+            });
+            it('should update the titles', function () {
+                var titles = chart.selectAll('path.symbol title');
+                var expected = ['22,-2: 1','33,1: 2'];
+                expect(titles.size()).toBe(expected.length);
+                titles.each(function (d) {
+                    expect(this.textContent).toBe(expected.shift());
+                });
+            });
+        });
+
         describe('brushing', function () {
             var otherDimension;
 
             beforeEach(function () {
                 otherDimension = data.dimension(function (d) { return [+d.value, +d.nvalue]; });
 
-                chart.brush().extent([[22, -3], [44, 2]]);
-                chart.brush().on('brush')();
+                simulateChart2DBrushing(chart, [[22, -3], [44, 2]]);
+
                 chart.redraw();
+            });
+
+            it('should not create brush handles', function () {
+                var selectAll = chart.select('g.brush').selectAll('path.custom-brush-handle');
+                expect(selectAll.size()).toBe(0);
             });
 
             it('should filter dimensions based on the same data', function () {
@@ -239,9 +282,11 @@ describe('dc.scatterPlot', function () {
                 expect(otherDimension.top(Infinity).length).toBe(3);
             });
 
+            /* D3v4 - no easy replacement, dropping this case
             it('should set the height of the brush to the height implied by the extent', function () {
                 expect(chart.select('g.brush rect.extent').attr('height')).toBe('46');
             });
+            */
 
             it('should not add handles to the brush', function () {
                 expect(chart.select('.resize path').empty()).toBeTruthy();
@@ -307,8 +352,8 @@ describe('dc.scatterPlot', function () {
                 });
 
                 it('should restore sizes, colors, and opacity when the brush is empty', function () {
-                    chart.brush().extent([[22, 2], [22, -3]]);
-                    chart.brush().on('brush')();
+                    simulateChart2DBrushing(chart, [[22, 2], [22, -3]]);
+
                     jasmine.clock().tick(100);
 
                     selectedPoints = symbolsOfRadius(chart.symbolSize());
@@ -339,7 +384,7 @@ describe('dc.scatterPlot', function () {
         return function () {
             var symbol = d3.select(this);
             var size = Math.pow(r, 2);
-            var path = d3.svg.symbol().size(size)();
+            var path = d3.symbol().size(size)();
             var result = comparePaths(symbol.attr('d'), path);
             return result.pass;
         };
@@ -357,7 +402,7 @@ describe('dc.scatterPlot', function () {
 
     function symbolsMatching (pred) {
         function getData (symbols) {
-            return symbols[0].map(function (symbol) {
+            return symbols.nodes().map(function (symbol) {
                 return d3.select(symbol).datum();
             });
         }
@@ -380,7 +425,7 @@ describe('dc.scatterPlot', function () {
             compositeChart = dc.compositeChart('#' + id);
             compositeChart
                 .dimension(dimension)
-                .x(d3.time.scale.utc().domain([makeDate(2012, 0, 1), makeDate(2012, 11, 31)]))
+                .x(d3.scaleUtc().domain([makeDate(2012, 0, 1), makeDate(2012, 11, 31)]))
                 .transitionDuration(0)
                 .legend(dc.legend())
                 .compose([
@@ -430,7 +475,7 @@ describe('dc.scatterPlot', function () {
         });
 
         function nthChart (n) {
-            var subChart = d3.select(compositeChart.selectAll('g.sub')[0][n]);
+            var subChart = d3.select(compositeChart.selectAll('g.sub').nodes()[n]);
 
             subChart.expectPlotSymbolsToHaveClass = function (className) {
                 subChart.selectAll('path.symbol').each(function () {
@@ -454,5 +499,41 @@ describe('dc.scatterPlot', function () {
             return subChart;
         }
     });
+    describe('with ordinal axes', function () {
+        beforeEach(function () {
+            dimension = data.dimension(function (d) { return [d.state, d.region]; });
+            group = dimension.group();
+            chart
+                .margins({left: 50, top: 10, right: 0, bottom: 20})
+                .dimension(dimension)
+                .group(group)
+                .x(d3.scaleBand())
+              // ordinal axes work but you have to set the padding for both axes & give the y domain
+                .y(d3.scaleBand().paddingInner(1).domain(group.all().map(function (kv) { return kv.key[1]; })))
+                .xUnits(dc.units.ordinal)
+                ._rangeBandPadding(1)
+                .render();
+        });
+        it('should correctly place the symbols', function () {
+            expect(nthSymbol(4).attr('transform')).toMatchTranslate(262.5, 75);
+            expect(nthSymbol(5).attr('transform')).toMatchTranslate(337.5, 37.5);
+            expect(nthSymbol(7).attr('transform')).toMatchTranslate(412.5, 0);
+        });
+        describe('with grid lines', function () {
+            beforeEach(function () {
+                chart
+                    .renderHorizontalGridLines(true)
+                    .renderVerticalGridLines(true)
+                    .render();
+            });
+            it('should draw the correct number of grid lines', function () {
+                expect(chart.selectAll('.grid-line.horizontal line').size()).toBe(5);
+                expect(chart.selectAll('.grid-line.vertical line').size()).toBe(6);
+            });
+        });
+    });
+    function nthSymbol (i) {
+        return d3.select(chart.selectAll('path.symbol').nodes()[i]);
+    }
 });
 

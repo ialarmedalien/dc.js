@@ -26,7 +26,7 @@ describe('dc.boxPlot', function () {
             .boxPadding(0)
             .transitionDuration(0)
             .transitionDelay(0)
-            .y(d3.scale.linear().domain([0, 144]))
+            .y(d3.scaleLinear().domain([0, 144]))
             .ordinalColors(['#01','#02']);
     });
 
@@ -39,8 +39,20 @@ describe('dc.boxPlot', function () {
             expect(chart.svg().empty()).toBeFalsy();
         });
 
-        it('should create one outlier circle per outlier', function () {
+        it('should create normal outlier circles (by default)', function () {
             expect(chart.selectAll('circle.outlier').size()).toBe(2);
+        });
+
+        it('should not create bold outlier circles (by default)', function () {
+            expect(chart.selectAll('circle.outlierBold').size()).toBe(0);
+        });
+
+        it('should not create data points (by default)', function () {
+            expect(chart.selectAll('circle.data').size()).toBe(0);
+        });
+
+        it('should not create tooltips (by default)', function () {
+            expect(chart.selectAll('circle.data').select('title').size()).toBe(0);
         });
 
         it('should create an offset box for each dimension in the group', function () {
@@ -59,6 +71,92 @@ describe('dc.boxPlot', function () {
 
         it('should place the left box line at the x origin', function () {
             expect(box(1).select('rect.box').attr('x')).toBe('0');
+        });
+
+        describe('with showOutliers disabled', function () {
+            beforeEach(function () {
+                chart.showOutliers(false).render();
+            });
+
+            it('should not create any outlier circles ', function () {
+                expect(chart.selectAll('circle.outlier').size()).toBe(0);
+                expect(chart.selectAll('circle.outlierBold').size()).toBe(0);
+            });
+        });
+
+        describe('with renderDataPoints enabled', function () {
+            beforeEach(function () {
+                chart
+                    .renderDataPoints(true)
+                    .renderTitle(true)
+                    .boxWidth(100)
+                    .render();
+            });
+
+            it('should create one data point per data value (non-outlier)', function () {
+                expect(chart.selectAll('circle.data').size()).toBe(12);
+            });
+            it('should create a tooltip for each data value (non-outlier)', function () {
+                expect(chart.selectAll('circle.data').select('title').size()).toBe(12);
+            });
+            it('should display the data between 10 to 90 of the box (by default)', function () {
+                var w = box(1).select('rect.box').attr('width');
+                var min = (w / 2) - (w * chart.dataWidthPortion() / 2);
+                var max = (w / 2) + (w * chart.dataWidthPortion() / 2);
+                chart.selectAll('circle.data').each(function () {
+                    expect(d3.select(this).attr('cx')).toBeGreaterThan(min - 0.1);
+                    expect(d3.select(this).attr('cx')).toBeLessThan(max + 0.1);
+                });
+            });
+
+            describe('and dataWidthPortion set to 50%', function () {
+                beforeEach(function () {
+                    chart
+                        .dataWidthPortion(0.5)
+                        .render();
+                });
+
+                it('should display the data between 25 to 75 of the box', function () {
+                    var w = box(1).select('rect.box').attr('width');
+                    var min = (w / 2) - (w * chart.dataWidthPortion() / 2);
+                    var max = (w / 2) + (w * chart.dataWidthPortion() / 2);
+                    chart.selectAll('circle.data').each(function () {
+                        expect(d3.select(this).attr('cx')).toBeGreaterThan(min - 0.1);
+                        expect(d3.select(this).attr('cx')).toBeLessThan(max + 0.1);
+                    });
+                });
+            });
+
+            describe('and dataWidthPortion set to 10%', function () {
+                beforeEach(function () {
+                    chart
+                        .dataWidthPortion(0.1)
+                        .render();
+                });
+
+                it('should display the data between 45 to 55 of the box', function () {
+                    var w = box(1).select('rect.box').attr('width');
+                    var min = (w / 2) - (w * chart.dataWidthPortion() / 2);
+                    var max = (w / 2) + (w * chart.dataWidthPortion() / 2);
+                    chart.selectAll('circle.data').each(function () {
+                        expect(d3.select(this).attr('cx')).toBeGreaterThan(min - 0.1);
+                        expect(d3.select(this).attr('cx')).toBeLessThan(max + 0.1);
+                    });
+                });
+            });
+        });
+
+        describe('with boldOutlier enabled', function () {
+            beforeEach(function () {
+                chart.boldOutlier(true).render();
+            });
+
+            it('should create bold outlier circles', function () {
+                expect(chart.selectAll('circle.outlierBold').size()).toBe(2);
+            });
+            it('should not create normal outlier circles ', function () {
+                expect(chart.selectAll('circle.outlier').size()).toBe(0);
+            });
         });
 
         describe('the width of the box plot', function () {
@@ -196,15 +294,15 @@ describe('dc.boxPlot', function () {
     });
 
     function box (n) {
-        var nthBox = d3.select(chart.selectAll('g.box')[0][n]);
+        var nthBox = d3.select(chart.selectAll('g.box').nodes()[n]);
         nthBox.boxText = function (n) {
-            return d3.select(this.selectAll('text.box')[0][n]);
+            return d3.select(this.selectAll('text.box').nodes()[n]);
         };
         nthBox.whiskerLine = function (n) {
-            return d3.select(this.selectAll('line.whisker')[0][n]);
+            return d3.select(this.selectAll('line.whisker').nodes()[n]);
         };
         nthBox.whiskerText = function (n) {
-            return d3.select(this.selectAll('text.whisker')[0][n]);
+            return d3.select(this.selectAll('text.whisker').nodes()[n]);
         };
         return nthBox;
     }
