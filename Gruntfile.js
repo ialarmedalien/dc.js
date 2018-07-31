@@ -137,7 +137,7 @@ module.exports = function (grunt) {
         connect: {
             server: {
                 options: {
-                    port: process.env.PORT || 8889,
+                    port: process.env.PORT || 8888,
                     base: '.'
                 }
             }
