@@ -185,6 +185,20 @@ describe('dc.sunburstChart', function () {
             });
         });
 
+        describe('with radius padding', function () {
+            beforeEach(function () {
+                chart.externalRadiusPadding(17)
+                    .render();
+                return chart;
+            });
+            it('should not change center', function () {
+                expect(chart.select('svg g').attr('transform')).toMatchTranslate(defaultCenter.x, defaultCenter.y);
+            });
+            it('should decrease outer radius', function () {
+                expect(chart.select('svg g.pie-slice-level-3 path').attr('d')).toMatch(/83[, ]83/); // i.e. 100-17
+            });
+        });
+
         describe('re-render', function () {
             beforeEach(function () {
                 chart.render();
@@ -249,8 +263,8 @@ describe('dc.sunburstChart', function () {
                 chart.filter(dc.filters.HierarchyFilter(['US', 'West', 'Colorado']));
                 chart.render();
                 chart.selectAll('g.pie-slice-level-3').each(function (d) {
-                    if (d.path.toString() === ['CA', 'East', 'Ontario'].toString() ||
-                        d.path.toString() === ['US', 'West', 'Colorado'].toString()
+                    if (d./* key */path.toString() === ['CA', 'East', 'Ontario'].toString() ||
+                        d./* key */path.toString() === ['US', 'West', 'Colorado'].toString()
                     ) {
                         expect(d3.select(this).attr('class').indexOf('selected') >= 0).toBeTruthy();
                     } else {
@@ -282,7 +296,7 @@ describe('dc.sunburstChart', function () {
                 expect(chart.filters()).toEqual([]);
                 var d = chart.select('.pie-slice-level-3').datum();
                 chart.onClick(d);
-                expect(chart.filter().slice(0)).toEqual(d.path);
+                expect( chart.filter().slice(0) ).toEqual( d./* key */path /* */);
             });
             it('onClick should reset filter if clicked twice', function () {
                 expect(chart.filters()).toEqual([]);

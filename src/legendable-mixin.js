@@ -16,6 +16,8 @@ dc.legendableMixin = function (_chart) {
         return _chart.data()
           .map(function (d, i) {
             var legendable = { name: d.key, data: d.value, others: d.others, chart: _chart };
+        console.log(d)
+        console.log("i: " + i + "; legendable colour: " +  _chart.getColor(d, i))
             legendable.color = _chart.getColor(d, i);
             return legendable;
           })
@@ -37,7 +39,8 @@ dc.legendableMixin = function (_chart) {
     };
 
     function highlightSliceFromLegendable (legendable, highlighted) {
-        _chart.selectAll('g.' + _chart.sliceCssClass).each(function (d) {
+//        _chart.selectAll('g.' + _chart.sliceCssClass).each(function (d) {
+        _chart.selectAll('g.pie-slice').each(function (d) {
             if (legendable.name === d.data.key) {
                 d3.select(this).classed('highlight', highlighted);
             }

@@ -37,13 +37,16 @@ dc.sunburstChart = function (parent, chartGroup) {
     var _emptyTitle = 'empty';
 
     var _radius,
-        _innerRadius = 0;
+        _givenRadius, // specified radius, if any
+        _innerRadius = 0,
+        _externalRadiusPadding = 0;
 
     var _g;
     var _cx;
     var _cy;
     var _minAngleForLabel = DEFAULT_MIN_ANGLE_FOR_LABEL;
     var _externalLabelRadius;
+    var _drawPaths = false;
     var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
 
     _chart.colorAccessor(_chart.cappedKeyAccessor);
@@ -55,6 +58,12 @@ dc.sunburstChart = function (parent, chartGroup) {
         }
         return _chart.cappedValueAccessor(d);
     }
+    dc.override( _chart, 'cappedValueAccessor', function (d) {
+        if ( d.path ) {
+            return d.value;
+        }
+        return _chart._cappedValueAccessor(d);
+    });
 
     _chart.title(function (d) {
         return _chart.cappedKeyAccessor(d) + ': ' + extendedValueAccessor(d);
@@ -99,46 +108,90 @@ dc.sunburstChart = function (parent, chartGroup) {
         return _chart;
     };
 
+    _chart._doRedraw = function () {
+        drawChart();
+        return _chart;
+    };
+
+    function radiusPlusLabels () {
+        return _radius - _externalRadiusPadding + _externalLabelRadius;
+    }
+
+    function effectiveExtRadius () {
+        return _radius - _externalRadiusPadding;
+    }
+
+    function layout () {
+        return d3.partition()
+            .size([2 * Math.PI, effectiveExtRadius() * effectiveExtRadius() ]);
+    }
+
+    function partitionNodes (data) {
+        // The changes picked up from https://github.com/d3/d3-hierarchy/issues/50
+        var hierarchy = d3.hierarchy(data)
+            .sum(function (d) {
+                return d.children ? 0 : extendedValueAccessor(d);
+            })
+            .sort(function (a, b) {
+                return d3.ascending(a.data.path, b.data.path);
+            });
+
+        layout()(hierarchy);
+
+        // In D3v4 the returned data is slightly different, change it enough to suit our purposes.
+        var nodes = hierarchy.descendants().map(function (d) {
+            d.key = d.data.key;
+            d.path = d.data.path;
+            return d;
+        });
+
+        return nodes;
+    }
+
     function drawChart () {
-        // set radius on basis of chart dimension if missing
-        _radius = _radius ? _radius : d3.min([_chart.width(), _chart.height()]) / 2;
+        // set radius from chart size if none given, or if given radius is too large
+        var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
+        _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
 
         var arc = buildArcs();
 
-        var sunburstData, cdata;
+        var dataWithLayout, hierarchicalData;
         // if we have data...
         if (d3.sum(_chart.data(), _chart.valueAccessor())) {
-            cdata = dc.utils.toHierarchy(_chart.data(), _chart.valueAccessor());
-            sunburstData = partitionNodes(cdata);
+            hierarchicalData = dc.utils.toHierarchy(_chart.data(), _chart.valueAccessor());
+            dataWithLayout = partitionNodes(hierarchicalData);
             // First one is the root, which is not needed
-            sunburstData.shift();
+            dataWithLayout.shift();
             _g.classed(_emptyCssClass, false);
         } else {
             // otherwise we'd be getting NaNs, so override
             // note: abuse others for its ignoring the value accessor
-            cdata = dc.utils.toHierarchy([], function (d) {
+            hierarchicalData = dc.utils.toHierarchy([], function (d) {
                 return d.value;
             });
-            sunburstData = partitionNodes(cdata);
+            dataWithLayout = partitionNodes(hierarchicalData);
             _g.classed(_emptyCssClass, true);
         }
 
         if (_g) {
         var slices = _g.select('g.' + _sliceGroupCssClass)
             .selectAll('g.' + _sliceCssClass)
-            .data(sunburstData);
+            .data(dataWithLayout);
 
         var labels = _g.select('g.' + _labelGroupCssClass)
             .selectAll('text.' + _labelCssClass)
-            .data(sunburstData);
+            .data(dataWithLayout);
 
             removeElements(slices, labels);
 
-            createElements(slices, labels, arc, sunburstData);
+            createElements(slices, labels, arc, dataWithLayout);
 
-            updateElements(sunburstData, arc);
+            updateElements(dataWithLayout, arc);
 
             highlightFilter();
+
+            dc.transition(_g, _chart.transitionDuration(), _chart.transitionDelay())
+                .attr('transform', 'translate(' + _chart.cx() + ',' + _chart.cy() + ')');
         }
     }
 
@@ -198,13 +251,13 @@ dc.sunburstChart = function (parent, chartGroup) {
             });
     }
 
+    function highlightSlice (i, whether) {
+        _chart.select('g.pie-slice._' + i)
+            .classed('highlight', whether);
+    }
+
     function createLabels (labels, data, arc) {
         if (_chart.renderLabel()) {
-            var labels = _g.selectAll('text.' + _sliceCssClass)
-                .data(data);
-
-            labels.exit().remove();
-
             var labelsEnter = labels
                 .enter()
                 .append('text')
@@ -215,9 +268,68 @@ dc.sunburstChart = function (parent, chartGroup) {
                     }
                     return classes;
                 })
-                .on('click', onClick);
+                .on('click', onClick)
+                .on('mouseover', function (d, i) {
+                    highlightSlice(i, true);
+                })
+                .on('mouseout', function (d, i) {
+                    highlightSlice(i, false);
+                });
             positionLabels(labelsEnter, arc);
+            if (_externalLabelRadius && _drawPaths) {
+                updateLabelPaths(data, arc);
+            }
         }
+    }
+
+    function updateLabelPaths (data, arc) {
+        var polyline = _g.selectAll('polyline.' + _sliceCssClass)
+                .data(data);
+
+        polyline.exit().remove();
+
+        polyline = polyline
+            .enter()
+            .append('polyline')
+            .attr('class', function (d, i) {
+                return 'pie-path _' + i + ' ' + _sliceCssClass;
+            })
+            .on('click', onClick)
+            .on('mouseover', function (d, i) {
+                highlightSlice(i, true);
+            })
+            .on('mouseout', function (d, i) {
+                highlightSlice(i, false);
+            })
+            .merge(polyline);
+
+        var arc2 = d3.arc()
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .innerRadius(_radius - _externalRadiusPadding);
+        var transition = dc.transition(polyline, _chart.transitionDuration(), _chart.transitionDelay());
+
+        // this is one rare case where d3.selection differs from d3.transition
+        if (transition.attrTween) {
+            transition
+                .attrTween('points', function (d) {
+                    var current = this._current || d;
+                    current = {startAngle: current.x0, endAngle: current.x1};
+                    var interpolate = d3.interpolate(current, d);
+                    this._current = interpolate(0);
+                    return function (t) {
+                        var d2 = interpolate(t);
+                        return [arc.centroid(d2), arc2.centroid(d2)];
+                    };
+                });
+        } else {
+            transition.attr('points', function (d) {
+                return [arc.centroid(d), arc2.centroid(d)];
+            });
+        }
+        transition.style('visibility', function (d) {
+            return d.x1 - d.x0 < 0.0001 ? 'hidden' : 'visible';
+        });
+
     }
 
     function updateElements (data, arc) {
@@ -242,9 +354,12 @@ dc.sunburstChart = function (parent, chartGroup) {
 
     function updateLabels (data, arc) {
         if (_chart.renderLabel()) {
-            var labels = _g.selectAll('text.' + _sliceCssClass)
+            var labels = _g.selectAll('text.' + _labelCssClass)
                 .data(data);
             positionLabels(labels, arc);
+            if (_externalLabelRadius && _drawPaths) {
+                updateLabelPaths(data, arc);
+            }
         }
     }
 
@@ -281,6 +396,23 @@ dc.sunburstChart = function (parent, chartGroup) {
     }
 
     /**
+     * Get or set the external radius padding of the pie chart. This will force the radius of the
+     * pie chart to become smaller or larger depending on the value.
+     * @method externalRadiusPadding
+     * @memberof dc.pieChart
+     * @instance
+     * @param {Number} [externalRadiusPadding=0]
+     * @returns {Number|dc.pieChart}
+     */
+    _chart.externalRadiusPadding = function (externalRadiusPadding) {
+        if (!arguments.length) {
+            return _externalRadiusPadding;
+        }
+        _externalRadiusPadding = externalRadiusPadding;
+        return _chart;
+    };
+
+    /**
      * Get or set the inner radius of the sunburst chart. If the inner radius is greater than 0px then the
      * sunburst chart will be rendered as a doughnut chart. Default inner radius is 0px.
      * @method innerRadius
@@ -308,9 +440,9 @@ dc.sunburstChart = function (parent, chartGroup) {
      */
     _chart.radius = function (radius) {
         if (!arguments.length) {
-            return _radius;
+            return _givenRadius || _radius;
         }
-        _radius = radius;
+        _givenRadius = radius;
         return _chart;
     };
 
@@ -401,6 +533,23 @@ dc.sunburstChart = function (parent, chartGroup) {
         return _chart;
     };
 
+    /**
+     * Get or set whether to draw lines from pie slices to their labels.
+     *
+     * @method drawPaths
+     * @memberof dc.pieChart
+     * @instance
+     * @param {Boolean} [drawPaths]
+     * @returns {Boolean|dc.pieChart}
+     */
+    _chart.drawPaths = function (drawPaths) {
+        if (arguments.length === 0) {
+            return _drawPaths;
+        }
+        _drawPaths = drawPaths;
+        return _chart;
+    };
+
     function buildArcs () {
         return d3.arc()
             .startAngle(function (d) {
@@ -444,36 +593,6 @@ dc.sunburstChart = function (parent, chartGroup) {
         return filters;
     }
 
-    _chart._doRedraw = function () {
-        drawChart();
-        return _chart;
-    };
-
-    function partitionNodes (data) {
-        // The changes picked up from https://github.com/d3/d3-hierarchy/issues/50
-        var hierarchy = d3.hierarchy(data)
-            .sum(function (d) {
-                return d.children ? 0 : extendedValueAccessor(d);
-            })
-            .sort(function (a, b) {
-                return d3.ascending(a.data.path, b.data.path);
-            });
-
-        var partition = d3.partition()
-            .size([2 * Math.PI, _radius * _radius]);
-
-        partition(hierarchy);
-
-        // In D3v4 the returned data is slightly different, change it enough to suit our purposes.
-        var nodes = hierarchy.descendants().map(function (d) {
-            d.key = d.data.key;
-            d.path = d.data.path;
-            return d;
-        });
-
-        return nodes;
-    }
-
     function sliceTooSmall (d) {
         var angle = d.x1 - d.x0;
         return isNaN(angle) || angle < _minAngleForLabel;
@@ -503,7 +622,9 @@ dc.sunburstChart = function (parent, chartGroup) {
     }
 
     function fill (d, i) {
-        return _chart.getColor(d, i);
+        console.log(d.data)
+        console.log("i: " + i + "; colour: " +  _chart.getColor(d.data, i))
+        return _chart.getColor(d.data, i);
     }
 
     function _onClick (d) {
@@ -551,10 +672,10 @@ dc.sunburstChart = function (parent, chartGroup) {
     function labelPosition (d, arc) {
         var centroid;
         if (_externalLabelRadius) {
-            centroid = d3.svg.arc()
-                .outerRadius(_radius + _externalLabelRadius)
-                .innerRadius(_radius + _externalLabelRadius)
-                .centroid(d);
+            centroid = d3.arc()
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .centroid( d.hasOwnProperty('x1') ? { startAngle: d.x0, endAngle: d.x1 } : d );
         } else {
             centroid = arc.centroid(d);
         }
