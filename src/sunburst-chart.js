@@ -30,6 +30,9 @@ dc.sunburstChart = function (parent, chartGroup) {
     var DEFAULT_MIN_ANGLE_FOR_LABEL = 0.5;
 
     var _sliceCssClass = 'pie-slice';
+    var _labelCssClass = 'pie-label';
+    var _sliceGroupCssClass = 'pie-slice-group';
+    var _labelGroupCssClass = 'pie-label-group';
     var _emptyCssClass = 'empty-chart';
     var _emptyTitle = 'empty';
 
@@ -41,7 +44,7 @@ dc.sunburstChart = function (parent, chartGroup) {
     var _cy;
     var _minAngleForLabel = DEFAULT_MIN_ANGLE_FOR_LABEL;
     var _externalLabelRadius;
-    var _chart = dc.capMixin(dc.colorMixin(dc.baseMixin({})));
+    var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
 
     _chart.colorAccessor(_chart.cappedKeyAccessor);
 
@@ -61,6 +64,8 @@ dc.sunburstChart = function (parent, chartGroup) {
     _chart.renderLabel(true);
 
     _chart.transitionDuration(350);
+    _chart.transitionDelay(0);
+
 
     _chart.filterHandler(function (dimension, filters) {
         if (filters.length === 0) {
@@ -85,6 +90,9 @@ dc.sunburstChart = function (parent, chartGroup) {
         _g = _chart.svg()
             .append('g')
             .attr('transform', 'translate(' + _chart.cx() + ',' + _chart.cy() + ')');
+
+        _g.append('g').attr('class', _sliceGroupCssClass);
+        _g.append('g').attr('class', _labelGroupCssClass);
 
         drawChart();
 
@@ -116,24 +124,29 @@ dc.sunburstChart = function (parent, chartGroup) {
         }
 
         if (_g) {
-            var slices = _g.selectAll('g.' + _sliceCssClass)
-                .data(sunburstData);
-            createElements(slices, arc, sunburstData);
+        var slices = _g.select('g.' + _sliceGroupCssClass)
+            .selectAll('g.' + _sliceCssClass)
+            .data(sunburstData);
+
+        var labels = _g.select('g.' + _labelGroupCssClass)
+            .selectAll('text.' + _labelCssClass)
+            .data(sunburstData);
+
+            removeElements(slices, labels);
+
+            createElements(slices, labels, arc, sunburstData);
 
             updateElements(sunburstData, arc);
-
-            removeElements(slices);
 
             highlightFilter();
         }
     }
 
-    function createElements (slices, arc, sunburstData) {
+    function createElements (slices, labels, arc, data) {
         var slicesEnter = createSliceNodes(slices);
-
         createSlicePath(slicesEnter, arc);
         createTitles(slicesEnter);
-        createLabels(sunburstData, arc);
+        createLabels(labels, data, arc);
     }
 
     function createSliceNodes (slices) {
@@ -156,7 +169,7 @@ dc.sunburstChart = function (parent, chartGroup) {
                 return safeArc(d, i, arc);
             });
 
-        var transition = dc.transition(slicePath, _chart.transitionDuration());
+        var transition = dc.transition(slicePath, _chart.transitionDuration(), _chart.transitionDelay());
         if (transition.attrTween) {
             transition.attrTween('d', tweenSlice);
         }
@@ -170,8 +183,8 @@ dc.sunburstChart = function (parent, chartGroup) {
         }
     }
 
-    function positionLabels (labelsEnter, arc) {
-        dc.transition(labelsEnter, _chart.transitionDuration())
+    function positionLabels (labels, arc) {
+        dc.transition(labels, _chart.transitionDuration(), _chart.transitionDelay())
             .attr('transform', function (d) {
                 return labelPosition(d, arc);
             })
@@ -185,10 +198,10 @@ dc.sunburstChart = function (parent, chartGroup) {
             });
     }
 
-    function createLabels (sunburstData, arc) {
+    function createLabels (labels, data, arc) {
         if (_chart.renderLabel()) {
             var labels = _g.selectAll('text.' + _sliceCssClass)
-                .data(sunburstData);
+                .data(data);
 
             labels.exit().remove();
 
@@ -196,7 +209,7 @@ dc.sunburstChart = function (parent, chartGroup) {
                 .enter()
                 .append('text')
                 .attr('class', function (d, i) {
-                    var classes = _sliceCssClass + ' _' + i;
+                    var classes = _sliceCssClass + ' ' + _labelCssClass + ' _' + i;
                     if (_externalLabelRadius) {
                         classes += ' external';
                     }
@@ -207,38 +220,38 @@ dc.sunburstChart = function (parent, chartGroup) {
         }
     }
 
-    function updateElements (sunburstData, arc) {
-        updateSlicePaths(sunburstData, arc);
-        updateLabels(sunburstData, arc);
-        updateTitles(sunburstData);
+    function updateElements (data, arc) {
+        updateSlicePaths(data, arc);
+        updateLabels(data, arc);
+        updateTitles(data);
     }
 
-    function updateSlicePaths (sunburstData, arc) {
+    function updateSlicePaths (data, arc) {
         var slicePaths = _g.selectAll('g.' + _sliceCssClass)
-            .data(sunburstData)
+            .data(data)
             .select('path')
             .attr('d', function (d, i) {
                 return safeArc(d, i, arc);
             });
-        var transition = dc.transition(slicePaths, _chart.transitionDuration());
+        var transition = dc.transition(slicePaths, _chart.transitionDuration(), _chart.transitionDelay());
         if (transition.attrTween) {
             transition.attrTween('d', tweenSlice);
         }
         transition.attr('fill', fill);
     }
 
-    function updateLabels (sunburstData, arc) {
+    function updateLabels (data, arc) {
         if (_chart.renderLabel()) {
             var labels = _g.selectAll('text.' + _sliceCssClass)
-                .data(sunburstData);
+                .data(data);
             positionLabels(labels, arc);
         }
     }
 
-    function updateTitles (sunburstData) {
+    function updateTitles (data) {
         if (_chart.renderTitle()) {
             _g.selectAll('g.' + _sliceCssClass)
-                .data(sunburstData)
+                .data(data)
                 .select('title')
                 .text(function (d) {
                     return _chart.title()(d);
@@ -246,8 +259,9 @@ dc.sunburstChart = function (parent, chartGroup) {
         }
     }
 
-    function removeElements (slices) {
+    function removeElements (slices, labels) {
         slices.exit().remove();
+        labels.exit().remove();
     }
 
     function highlightFilter () {
@@ -550,7 +564,7 @@ dc.sunburstChart = function (parent, chartGroup) {
             return 'translate(' + centroid + ')';
         }
     }
-
+/*
     _chart.legendables = function () {
         return _chart.data().map(function (d, i) {
             var legendable = {name: d.key, data: d.value, others: d.others, chart: _chart};
@@ -578,6 +592,6 @@ dc.sunburstChart = function (parent, chartGroup) {
             }
         });
     }
-
+*/
     return _chart.anchor(parent, chartGroup);
 };

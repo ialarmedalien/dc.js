@@ -797,7 +797,8 @@ describe('dc.pieChart', function () {
                 var legendItem = d3.select(this);
                 legendItem.on('mouseover')(legendItem.datum());
 
-                expect(chart.select('g.pie-slice._' + i).classed('highlight')).toBeTruthy();
+                // expect(chart.select('g.pie-slice._' + i).classed('highlight')).toBeTruthy();
+expect(chart.select('g.pie-slice.highlight').datum().data.key).toEqual(legendItem.datum().name);
                 legendItem.on('mouseout')(legendItem.datum());
             });
         });
