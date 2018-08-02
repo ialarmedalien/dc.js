@@ -47,19 +47,21 @@ dc.sunburstChart = function (parent, chartGroup) {
     var _minAngleForLabel = DEFAULT_MIN_ANGLE_FOR_LABEL;
     var _externalLabelRadius;
     var _drawPaths = false;
-    var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
+    var _chart = dc.hierarchyMixin(dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({})))));
 
     _chart.colorAccessor(_chart.cappedKeyAccessor);
 
     // Handle cases if value corresponds to generated parent nodes
     function extendedValueAccessor (d) {
-        if (d.path) {
+//        if (d.path) {
+       if (d.data.key) {
             return d.value;
         }
         return _chart.cappedValueAccessor(d);
     }
     dc.override( _chart, 'cappedValueAccessor', function (d) {
-        if ( d.path ) {
+//        if (d.path) {
+       if (d.data.key) {
             return d.value;
         }
         return _chart._cappedValueAccessor(d);
@@ -152,24 +154,26 @@ dc.sunburstChart = function (parent, chartGroup) {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
-
+        var chartData = _chart.data();
         var arc = buildArcs();
 
         var dataWithLayout, hierarchicalData;
         // if we have data...
-        if (d3.sum(_chart.data(), _chart.valueAccessor())) {
-            hierarchicalData = dc.utils.toHierarchy(_chart.data(), _chart.valueAccessor());
-            dataWithLayout = partitionNodes(hierarchicalData);
+        if (d3.sum( chartData, _chart.valueAccessor())) {
+//             hierarchicalData = dc.utils.toHierarchy( chartData, _chart.valueAccessor());
+//             dataWithLayout = partitionNodes(hierarchicalData);
+            dataWithLayout = _chart.prepData( chartData, layout() );
             // First one is the root, which is not needed
             dataWithLayout.shift();
             _g.classed(_emptyCssClass, false);
         } else {
             // otherwise we'd be getting NaNs, so override
             // note: abuse others for its ignoring the value accessor
-            hierarchicalData = dc.utils.toHierarchy([], function (d) {
-                return d.value;
-            });
-            dataWithLayout = partitionNodes(hierarchicalData);
+            dataWithLayout = _chart.prepData( [], layout() );
+//             hierarchicalData = dc.utils.toHierarchy([], function (d) {
+//                 return d.value;
+//             });
+//             dataWithLayout = partitionNodes(hierarchicalData);
             _g.classed(_emptyCssClass, true);
         }
 
@@ -559,7 +563,8 @@ dc.sunburstChart = function (parent, chartGroup) {
                 return d.x1;
             })
             .innerRadius(function (d) {
-                return d.data.path && d.data.path.length === 1 ? _innerRadius : Math.sqrt(d.y0);
+                return d.data.key && d.data.key.length === 1 ? _innerRadius : Math.sqrt(d.y0);
+//                return d.data.path && d.data.path.length === 1 ? _innerRadius : Math.sqrt(d.y0);
             })
             .outerRadius(function (d) {
                 return Math.sqrt(d.y1);
@@ -567,7 +572,8 @@ dc.sunburstChart = function (parent, chartGroup) {
     }
 
     function isSelectedSlice (d) {
-        return isPathFiltered(d.path);
+        return isPathFiltered(d.key);
+//         return isPathFiltered(d.path);
     }
 
     function isPathFiltered (path) {
@@ -630,7 +636,7 @@ dc.sunburstChart = function (parent, chartGroup) {
     function _onClick (d) {
         // Clicking on Legends do not filter, it throws exception
         // Must be better way to handle this, in legends we need to access `d.key`
-        var path = d.path || d.key;
+        var path = d.key;
         var filter = dc.filters.HierarchyFilter(path);
 
         // filters are equal to, parents or children of the path.

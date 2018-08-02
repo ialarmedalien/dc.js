@@ -151,7 +151,8 @@ describe('dc.sunburstChart', function () {
         });
         it('slice label text should be set', function () {
             chart.selectAll('svg g text.pie-slice').call(function (p) {
-                expect(p.text()).toEqual(p.datum().key);
+//                expect(p.text()).toEqual(p.datum().key);
+                expect(p.text()).toEqual(p.datum().key.pop());
             });
         });
         it('slice label should be middle anchored', function () {
@@ -263,8 +264,8 @@ describe('dc.sunburstChart', function () {
                 chart.filter(dc.filters.HierarchyFilter(['US', 'West', 'Colorado']));
                 chart.render();
                 chart.selectAll('g.pie-slice-level-3').each(function (d) {
-                    if (d./* key */path.toString() === ['CA', 'East', 'Ontario'].toString() ||
-                        d./* key */path.toString() === ['US', 'West', 'Colorado'].toString()
+                    if (d.key.toString() === ['CA', 'East', 'Ontario'].toString() ||
+                        d.key.toString() === ['US', 'West', 'Colorado'].toString()
                     ) {
                         expect(d3.select(this).attr('class').indexOf('selected') >= 0).toBeTruthy();
                     } else {
@@ -296,7 +297,7 @@ describe('dc.sunburstChart', function () {
                 expect(chart.filters()).toEqual([]);
                 var d = chart.select('.pie-slice-level-3').datum();
                 chart.onClick(d);
-                expect( chart.filter().slice(0) ).toEqual( d./* key */path /* */);
+                expect( chart.filter().slice(0) ).toEqual( d.key );
             });
             it('onClick should reset filter if clicked twice', function () {
                 expect(chart.filters()).toEqual([]);

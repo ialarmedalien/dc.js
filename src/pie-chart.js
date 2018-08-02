@@ -97,19 +97,19 @@ dc.pieChart = function (parent, chartGroup) {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
-
+        var chartData = _chart.data();
         var arc = buildArcs();
 
         var pie = layout();
         var dataWithLayout;
         // if we have data...
-        if (d3.sum(_chart.data(), _chart.valueAccessor())) {
-            dataWithLayout = pie(_chart.data());
+        if (d3.sum( chartData, _chart.valueAccessor())) {
+            dataWithLayout = pie( chartData );
             _g.classed(_emptyCssClass, false);
         } else {
             // otherwise we'd be getting NaNs, so override
             // note: abuse others for its ignoring the value accessor
-            dataWithLayout = pie([{key: _emptyTitle, value: 1, others: [_emptyTitle]}]);
+            dataWithLayout = pie([{ key: _emptyTitle, value: 1, others: [_emptyTitle] }]);
             _g.classed(_emptyCssClass, true);
         }
 
