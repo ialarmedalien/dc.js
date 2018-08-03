@@ -152,7 +152,7 @@ describe('dc.sunburstChart', function () {
         it('slice label text should be set', function () {
             chart.selectAll('svg g text.pie-slice').call(function (p) {
 //                expect(p.text()).toEqual(p.datum().key);
-                expect(p.text()).toEqual(p.datum().key.pop());
+                expect(p.text()).toEqual( p.datum().key.pop() || '' );
             });
         });
         it('slice label should be middle anchored', function () {

@@ -10,22 +10,21 @@
  * @returns {dc.baseMixin}
  */
 dc.hierarchyMixin = function (_chart) {
-    // Handle cases if value corresponds to generated parent nodes
-    _chart.extendedValueAccessor = function (d) {
-        try {
-            return _chart.cappedValueAccessor(d)
-        }
-        catch (e) {
-            return d.value || 0
-        }
-        return _chart.cappedValueAccessor(d);
-    };
+//     Handle cases if value corresponds to generated parent nodes
+//     _chart.extendedValueAccessor = function (d) {
+//         try {
+//             return _chart.cappedValueAccessor(d)
+//         }
+//         catch (e) {
+//             return d.value || 0
+//         }
+//         return _chart.cappedValueAccessor(d);
+//     };
 
-    _chart.title(function (d) {
-        return _chart.cappedKeyAccessor(d) + ': ' + _chart.extendedValueAccessor(d);
-    });
+//     _chart.title(function (d) {
+//         return _chart.cappedKeyAccessor(d) + ': ' + _chart.extendedValueAccessor(d);
+//     });
 
-/*
     _chart.filterHandler(function (dimension, filters) {
         if (filters.length === 0) {
             dimension.filter(null);
@@ -42,6 +41,36 @@ dc.hierarchyMixin = function (_chart) {
         }
         return filters;
     });
+
+    _chart.isSelectedSlice = function (d) {
+        return isPathFiltered( d.key );
+    }
+
+    function isPathFiltered (path) {
+        for (var i = 0; i < _chart.filters().length; i++) {
+            var currentFilter = _chart.filters()[i];
+            if (currentFilter.isFiltered(path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+//  returns all filters that are a parent or child of the path
+    _chart.filtersForPath = function (path) {
+//    function filtersForPath (path) {
+        var pathFilter = dc.filters.HierarchyFilter(path);
+        var filters = [];
+        for (var i = 0; i < _chart.filters().length; i++) {
+            var currentFilter = _chart.filters()[i];
+            if (currentFilter.isFiltered(path) || pathFilter.isFiltered(currentFilter)) {
+                filters.push(currentFilter);
+            }
+        }
+        return filters;
+    }
+
+/*
 
     // in pie-type-mixin
 //    function highlightFilter () {
@@ -60,35 +89,6 @@ dc.hierarchyMixin = function (_chart) {
             });
         }
     };
-
-    _chart.isSelectedSlice = function (d) {
-        return isPathFiltered( d.key );
-    }
-
-    function isPathFiltered (path) {
-        for (var i = 0; i < _chart.filters().length; i++) {
-            var currentFilter = _chart.filters()[i];
-            if (currentFilter.isFiltered(path)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-//  returns all filters that are a parent or child of the path
-//  _chart.filtersForPath = function (path) {
-    function filtersForPath (path) {
-        var pathFilter = dc.filters.HierarchyFilter(path);
-        var filters = [];
-        for (var i = 0; i < _chart.filters().length; i++) {
-            var currentFilter = _chart.filters()[i];
-            if (currentFilter.isFiltered(path) || pathFilter.isFiltered(currentFilter)) {
-                filters.push(currentFilter);
-            }
-        }
-        return filters;
-    }
-
 
     function _onClick (d) {
         var path = d.key;
@@ -135,18 +135,30 @@ dc.hierarchyMixin = function (_chart) {
     _chart.prepData = function ( chartData, layout ) {
 
         var cdata = _chart.stratify( chartData, _chart.valueAccessor(), _chart.keyAccessor() );
-        var maxDepth = 0;
-        var nodes = layout( cdata
+
+        cdata
           .sum( function(d) {
-               return d.children ? 0 : _chart.extendedValueAccessor(d);
+              return _chart.cappedValueAccessor(d);
           })
           .sort(function (a, b) {
               return d3.ascending( _chart.ordering()(a), _chart.ordering()(b) );
-          })
+          });
+        var maxDepth = 0;
+        var nodes = layout( cdata
         )
         .descendants()
         .map(function (d) {
             d.key = d.data.key;
+            try {
+                var val = _chart.valueAccessor()(d);
+                d.data.computedValue = val;
+            }
+            catch (e) {
+                d.data.computedValue = d.value;
+            }
+//             if ( ! d.data.value ) {
+//                 d.data.value = d.value;
+//             }
             if (d.depth > maxDepth) {
                 maxDepth = d.depth;
             }
