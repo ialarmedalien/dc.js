@@ -27,6 +27,7 @@
  * @returns {dc.sunburstChart}
  **/
 dc.sunburstChart = function (parent, chartGroup) {
+/*
     var DEFAULT_MIN_ANGLE_FOR_LABEL = 0.5;
 
     var _sliceCssClass = 'pie-slice';
@@ -49,12 +50,22 @@ dc.sunburstChart = function (parent, chartGroup) {
     var _minAngleForLabel = DEFAULT_MIN_ANGLE_FOR_LABEL;
     var _externalLabelRadius;
     var _drawPaths = false;
+*/
     var _chart =
 //    dc.partitionMixin(
-    dc.hierarchyMixin(dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({})))))
+    dc.hierarchyMixin(dc.pieTypeMixin(dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))))))
 //    );
 
-    _chart.colorAccessor(_chart.cappedKeyAccessor);
+    _chart.tweenType = 'slice';
+
+/*
+    function getStartAngle (d) {
+        return d.x0;
+    }
+    function getEndAngle (d) {
+        return d.x1;
+    }
+*/
 
     // Handle cases if value corresponds to generated parent nodes
 //     function extendedValueAccessor (d) {
@@ -82,6 +93,9 @@ dc.sunburstChart = function (parent, chartGroup) {
         }
         return key[0];
     });
+
+/*
+    _chart.colorAccessor(_chart.cappedKeyAccessor);
 
     _chart.title(function (d) {
         return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
@@ -113,13 +127,17 @@ dc.sunburstChart = function (parent, chartGroup) {
         drawChart();
         return _chart;
     };
-
+*/
     function layout () {
         return d3.partition()
-            .size([2 * Math.PI, (_radius - _externalRadiusPadding) * (_radius - _externalRadiusPadding) ]);
+            .size([2 * Math.PI, (_chart.radius() - _chart.externalRadiusPadding() ) * (_chart.radius() - _chart.externalRadiusPadding() ) ]);
     }
 
-    function prepareData ( chartData, emptyChart ) {
+     function emptyData () {
+        return [];
+    }
+
+    _chart.prepareData = function ( chartData, emptyChart ) {
         var dataWithLayout;
         // if we have data...
         if ( ! emptyChart ) {
@@ -129,15 +147,19 @@ dc.sunburstChart = function (parent, chartGroup) {
         } else {
             // otherwise we'd be getting NaNs, so override
             // note: abuse others for its ignoring the value accessor
-            dataWithLayout = _chart.prepData( [], layout() );
+            dataWithLayout = _chart.prepData( emptyData(), layout() );
         }
         return dataWithLayout;
     }
-
+/*
     function drawChart () {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
+
+        tweenFn = tweenSlice;
+        buildArcs = buildSliceArcs;
+
         var arc = buildArcs();
 
         var chartData = _chart.data();
@@ -145,7 +167,7 @@ dc.sunburstChart = function (parent, chartGroup) {
         if (d3.sum( chartData, _chart.valueAccessor())) {
             emptyChart = false;
         }
-        var dataWithLayout = prepareData( chartData, emptyChart );
+        var dataWithLayout = _chart.prepareData( chartData, emptyChart );
 
         if (_g) {
           _g.classed(_emptyCssClass, emptyChart);
@@ -179,9 +201,7 @@ dc.sunburstChart = function (parent, chartGroup) {
     }
 
     function nodeSliceClass (d, i) {
-        return _sliceCssClass +
-            ' _' + i + ' ' +
-            _sliceCssClass + '-level-' + d.depth;
+        return _sliceCssClass + ' _' + i + ( d.depth ? ' ' + _sliceCssClass + '-level-' + d.depth : '' );
     }
 
     function createSliceNodes (slices) {
@@ -215,10 +235,11 @@ dc.sunburstChart = function (parent, chartGroup) {
     }
 
     function labelText (d) {
-        if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+//         if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+        if ((_chart.sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
             return '';
         }
-        return _chart.label()(d);
+        return _chart.label()(d.data);
     }
 
     function positionLabels (labels, arc) {
@@ -298,8 +319,7 @@ dc.sunburstChart = function (parent, chartGroup) {
         if (transition.attrTween) {
             transition
                 .attrTween('points', function (d) {
-                    var current = this._current || d;
-                    current = {startAngle: current.x0, endAngle: current.x1};
+                    var current = {startAngle: current.x0, endAngle: current.x1};
                     var interpolate = d3.interpolate(current, d);
                     this._current = interpolate(0);
                     return function (t) {
@@ -313,12 +333,11 @@ dc.sunburstChart = function (parent, chartGroup) {
             });
         }
         transition.style('visibility', function (d) {
-            if ( d.height !== 0 ) {
+            if ( d.height && d.height !== 0 ) {
               return 'hidden';
             }
-            return d.x1 - d.x0 < 0.0001 ? 'hidden' : 'visible';
+            return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
         });
-
     }
 
     function updateElements (data, arc) {
@@ -385,14 +404,14 @@ dc.sunburstChart = function (parent, chartGroup) {
     }
 
     /**
-     * Get or set the external radius padding of the pie chart. This will force the radius of the
-     * pie chart to become smaller or larger depending on the value.
+     * Get or set the external radius padding of the chart. This will force the radius of the
+     * chart to become smaller or larger depending on the value.
      * @method externalRadiusPadding
-     * @memberof dc.pieChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [externalRadiusPadding=0]
-     * @returns {Number|dc.pieChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.externalRadiusPadding = function (externalRadiusPadding) {
         if (!arguments.length) {
             return _externalRadiusPadding;
@@ -402,14 +421,14 @@ dc.sunburstChart = function (parent, chartGroup) {
     };
 
     /**
-     * Get or set the inner radius of the sunburst chart. If the inner radius is greater than 0px then the
-     * sunburst chart will be rendered as a doughnut chart. Default inner radius is 0px.
+     * Get or set the inner radius of the chart. If the inner radius is greater than 0px then the
+     * chart will be rendered as a doughnut chart. Default inner radius is 0px.
      * @method innerRadius
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [innerRadius=0]
-     * @returns {Number|dc.sunburstChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.innerRadius = function (innerRadius) {
         if (!arguments.length) {
             return _innerRadius;
@@ -422,11 +441,11 @@ dc.sunburstChart = function (parent, chartGroup) {
      * Get or set the outer radius. If the radius is not set, it will be half of the minimum of the
      * chart width and height.
      * @method radius
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [radius]
-     * @returns {Number|dc.sunburstChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.radius = function (radius) {
         if (!arguments.length) {
             return _givenRadius || _radius;
@@ -438,11 +457,11 @@ dc.sunburstChart = function (parent, chartGroup) {
     /**
      * Get or set center x coordinate position. Default is center of svg.
      * @method cx
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [cx]
-     * @returns {Number|dc.sunburstChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.cx = function (cx) {
         if (!arguments.length) {
             return (_cx || _chart.width() / 2);
@@ -454,11 +473,11 @@ dc.sunburstChart = function (parent, chartGroup) {
     /**
      * Get or set center y coordinate position. Default is center of svg.
      * @method cy
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [cy]
-     * @returns {Number|dc.sunburstChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.cy = function (cy) {
         if (!arguments.length) {
             return (_cy || _chart.height() / 2);
@@ -471,11 +490,11 @@ dc.sunburstChart = function (parent, chartGroup) {
      * Get or set the minimal slice angle for label rendering. Any slice with a smaller angle will not
      * display a slice label.
      * @method minAngleForLabel
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [minAngleForLabel=0.5]
-     * @returns {Number|dc.sunburstChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.minAngleForLabel = function (minAngleForLabel) {
         if (!arguments.length) {
             return _minAngleForLabel;
@@ -487,11 +506,11 @@ dc.sunburstChart = function (parent, chartGroup) {
     /**
      * Title to use for the only slice when there is no data.
      * @method emptyTitle
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {String} [title]
-     * @returns {String|dc.sunburstChart}
-     */
+     * @returns {String|dc.pieTypeMixin}
+     * /
     _chart.emptyTitle = function (title) {
         if (arguments.length === 0) {
             return _emptyTitle;
@@ -505,11 +524,11 @@ dc.sunburstChart = function (parent, chartGroup) {
      *
      * The argument specifies the extra radius to be added for slice labels.
      * @method externalLabels
-     * @memberof dc.sunburstChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Number} [externalLabelRadius]
-     * @returns {Number|dc.sunburstChart}
-     */
+     * @returns {Number|dc.pieTypeMixin}
+     * /
     _chart.externalLabels = function (externalLabelRadius) {
         if (arguments.length === 0) {
             return _externalLabelRadius;
@@ -523,14 +542,14 @@ dc.sunburstChart = function (parent, chartGroup) {
     };
 
     /**
-     * Get or set whether to draw lines from pie slices to their labels.
+     * Get or set whether to draw lines from slices to their labels.
      *
      * @method drawPaths
-     * @memberof dc.pieChart
+     * @memberof dc.pieTypeMixin
      * @instance
      * @param {Boolean} [drawPaths]
-     * @returns {Boolean|dc.pieChart}
-     */
+     * @returns {Boolean|dc.pieTypeMixin}
+     * /
     _chart.drawPaths = function (drawPaths) {
         if (arguments.length === 0) {
             return _drawPaths;
@@ -539,7 +558,9 @@ dc.sunburstChart = function (parent, chartGroup) {
         return _chart;
     };
 
-    function buildArcs () {
+    function buildArcs () {}
+
+    function buildSliceArcs () {
         return d3.arc()
             .startAngle(function (d) {
                 return d.x0;
@@ -554,112 +575,42 @@ dc.sunburstChart = function (parent, chartGroup) {
                 return Math.sqrt(d.y1);
             });
     }
-
-/*
-    function isSelectedSlice (d) {
-        return isPathFiltered(d.key);
-//         return isPathFiltered(d.path);
-    }
-
-    function isPathFiltered (path) {
-        for (var i = 0; i < _chart.filters().length; i++) {
-            var currentFilter = _chart.filters()[i];
-            if (currentFilter.isFiltered(path)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // returns all filters that are a parent or child of the path
-    function filtersForPath (path) {
-        var pathFilter = dc.filters.HierarchyFilter(path);
-        var filters = [];
-        for (var i = 0; i < _chart.filters().length; i++) {
-            var currentFilter = _chart.filters()[i];
-            if (currentFilter.isFiltered(path) || pathFilter.isFiltered(currentFilter)) {
-                filters.push(currentFilter);
-            }
-        }
-        return filters;
-    }
 */
-    function sliceTooSmall (d) {
-        var angle;
-        if ( d.hasOwnProperty('x0') ) {
-            angle = (d.x1 - d.x0);
-        }
-        else {
-            angle = (d.endAngle - d.startAngle);
-        }
-        return isNaN(angle) || angle < _minAngleForLabel;
-    }
-
-    function sliceHasNoData (d) {
+    _chart.sliceHasNoData = function (d) {
         return _chart.cappedValueAccessor(d) === 0;
     }
-
-    function tweenFn (d) {
-        var id = this;
-        return tweenSlice(d, id);
+//    function isOffCanvas (d) {
+    _chart.isOffCanvas = function (d) {
+        return !d || isNaN(d.dx) || isNaN(d.dy);
     }
 
-    function tweenSlice (b, id) {
+/*
+    function tweenFn (d) {}
+
+    function tweenSlice (b) {
         b.innerRadius = _innerRadius; //?
-        var current = id._current;
-        if (isOffCanvas(current)) {
+        var current = this._current;
+        if (_chart.isOffCanvas(current)) {
             current = {x: 0, y: 0, dx: 0, dy: 0};
         }
         // unfortunately, we can't tween an entire hierarchy since it has 2 way links.
         var tweenTarget = {x: b.x, y: b.y, dx: b.dx, dy: b.dy};
         var i = d3.interpolate(current, tweenTarget);
-        id._current = i(0);
+        this._current = i(0);
         return function (t) {
             return safeArc(Object.assign({}, b, i(t)), 0, buildArcs());
         };
-    }
-
-    function isOffCanvas (current) {
-        return !current || isNaN(current.dx) || isNaN(current.dy);
     }
 
     function fill (d, i) {
         return _chart.getColor(d.data, i);
     }
 
-    function _onClick (d) {
-        // Clicking on Legends do not filter, it throws exception
-        // Must be better way to handle this, in legends we need to access `d.key`
-        var path = d.key;
-        var filter = dc.filters.HierarchyFilter(path);
-
-        // filters are equal to, parents or children of the path.
-        var filters = _chart.filtersForPath(path);
-        var exactMatch = false;
-        // clear out any filters that cover the path filtered.
-        for (var i = filters.length - 1; i >= 0; i--) {
-            var currentFilter = filters[i];
-            if (dc.utils.arraysIdentical(currentFilter, path)) {
-                exactMatch = true;
-            }
-            _chart.filter(filters[i]);
-        }
-        dc.events.trigger(function () {
-            // if it is a new filter - put it in.
-            if (!exactMatch) {
-                _chart.filter(filter);
-            }
-            _chart.redrawGroup();
-        });
-    }
-
     _chart.onClick = onClick;
-    _chart.__clickHandler = _onClick;
 
     function onClick (d, i) {
         if (_g.attr('class') !== _emptyCssClass) {
-            _onClick(d, i);
-//            _chart.__clickHandler(d, i);
+            _chart.__clickHandler(d, i);
         }
     }
 
@@ -673,11 +624,11 @@ dc.sunburstChart = function (parent, chartGroup) {
 
     function labelPosition (d, arc) {
         var centroid;
-        if (_externalLabelRadius) {
+        if (_externalLabelRadius && d.height === 0) {
             centroid = d3.arc()
                 .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
-                .centroid( d.hasOwnProperty('x1') ? { startAngle: d.x0, endAngle: d.x1 } : d );
+                .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
         } else {
             centroid = arc.centroid(d);
         }
@@ -687,6 +638,6 @@ dc.sunburstChart = function (parent, chartGroup) {
             return 'translate(' + centroid + ')';
         }
     }
-
+*/
     return _chart.anchor(parent, chartGroup);
 };

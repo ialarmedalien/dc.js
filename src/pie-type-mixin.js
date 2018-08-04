@@ -48,6 +48,19 @@ dc.pieTypeMixin = function (_chart) {
     var _drawPaths = false;
 //     var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
 
+    var startAngleXFn = function (d) {
+        return d.x0;
+    },
+    endAngleXFn = function (d) {
+        return d.x1;
+    };
+    function getStartAngle (d) {
+        return d.startAngle;
+    }
+    function getEndAngle (d) {
+        return d.endAngle;
+    }
+
     _chart.colorAccessor(_chart.cappedKeyAccessor);
 
     _chart.title(function (d) {
@@ -92,13 +105,10 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-/*
-
-    var emptyData = [{ key: _emptyTitle, value: 1, others: [_emptyTitle] }];
-    function layout () {
-        return d3.pie().sort(null).value(_chart.cappedValueAccessor);
+    function emptyData () {
+        return [{ key: _emptyTitle, value: 1, others: [_emptyTitle] }];
     }
-*/
+
     function prepareData ( chartData, emptyChart ) {
         // if we have data...
         if ( ! emptyChart ) {
@@ -106,7 +116,7 @@ dc.pieTypeMixin = function (_chart) {
         } else {
             // otherwise we'd be getting NaNs, so override
             // note: abuse others for its ignoring the value accessor
-            return _chart.layout()( [{ key: _emptyTitle, value: 1, others: [_emptyTitle] }] );
+            return _chart.layout()( emptyData() );
         }
     }
 
@@ -114,6 +124,22 @@ dc.pieTypeMixin = function (_chart) {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
+
+        if ( _chart.tweenType === 'slice' ) {
+            getStartAngle = startAngleXFn;
+            getEndAngle = endAngleXFn;
+            tweenFn = tweenSlice;
+            buildArcs = buildSliceArcs;
+            labelText = labelTextSlice;
+            labelPosition = labelPositionSlice;
+            onClick = onClickSlice;
+            _chart.onClick = onClickSlice;
+        }
+        else {
+            tweenFn = tweenPie;
+            buildArcs = buildPieArcs;
+        }
+
         var arc = buildArcs();
 
         var chartData = _chart.data();
@@ -121,7 +147,7 @@ dc.pieTypeMixin = function (_chart) {
         if (d3.sum( chartData, _chart.valueAccessor())) {
             emptyChart = false;
         }
-        var dataWithLayout = prepareData( chartData, emptyChart );
+        var dataWithLayout = _chart.prepareData( chartData, emptyChart );
 
         if (_g) {
             _g.classed(_emptyCssClass, emptyChart);
@@ -155,7 +181,7 @@ dc.pieTypeMixin = function (_chart) {
     }
 
     function nodeSliceClass (d, i) {
-        return _sliceCssClass + ' _' + i + ( d.depth ? _sliceCssClass + '-level-' + d.depth : '' );
+        return _sliceCssClass + ' _' + i + ( d.depth ? ' ' + _sliceCssClass + '-level-' + d.depth : '' );
     }
 
     function createSliceNodes (slices) {
@@ -195,9 +221,15 @@ dc.pieTypeMixin = function (_chart) {
         return _chart.label()(d.data);
     }
 
+    function labelTextSlice (d) {
+        if ((_chart.sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+            return '';
+        }
+        return _chart.label()(d.data);
+    }
     // sunburst version
 //     function labelText (d) {
-//         if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+//         if ((_chart.sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
 //             return '';
 //         }
 //         return _chart.label()(d);
@@ -269,14 +301,21 @@ dc.pieTypeMixin = function (_chart) {
         var arc2 = d3.arc()
                 .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding);
+        if ( _chart.tweenType === 'slice' ) {
+            arc2.startAngle(function (d) {
+                    return d.x0;
+                })
+                .endAngle(function (d) {
+                    return d.x1;
+                })
+        }
 
         var transition = dc.transition(polyline, _chart.transitionDuration(), _chart.transitionDelay());
         // this is one rare case where d3.selection differs from d3.transition
         if (transition.attrTween) {
             transition
                 .attrTween('points', function (d) {
-                    var current = this._current || d;
-                    current = {startAngle: current.startAngle, endAngle: current.endAngle};
+                    var current = {startAngle: getStartAngle(d), endAngle: getEndAngle(d)};
                     var interpolate = d3.interpolate(current, d);
                     this._current = interpolate(0);
                     return function (t) {
@@ -290,9 +329,11 @@ dc.pieTypeMixin = function (_chart) {
             });
         }
         transition.style('visibility', function (d) {
-            return d.endAngle - d.startAngle < 0.0001 ? 'hidden' : 'visible';
+            if ( d.height && d.height !== 0 ) {
+              return 'hidden';
+            }
+            return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
         });
-
     }
 
     function updateElements (data, arc) {
@@ -513,13 +554,9 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-    // differs
-    function buildArcs () {
-        if ( _chart.tweenType === 'pie' ) {
-            return d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding)
-                .innerRadius(_innerRadius);
-        }
+    function buildArcs () {}
+
+    function buildSliceArcs () {
         return d3.arc()
             .startAngle(function (d) {
                 return d.x0;
@@ -535,40 +572,34 @@ dc.pieTypeMixin = function (_chart) {
             });
     }
 
+    function buildPieArcs () {
+        return d3.arc()
+            .outerRadius(_radius - _externalRadiusPadding)
+            .innerRadius(_innerRadius);
+    }
+
     // very different in sunburstChart!
 //     function isSelectedSlice (d) {
 //         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
 //     }
 
     function sliceTooSmall (d) {
-        var angle;
-        if ( d.hasOwnProperty('x0') ) {
-            angle = (d.x1 - d.x0);
-        }
-        else {
-            angle = (d.endAngle - d.startAngle);
-        }
+        var angle = ( getEndAngle(d) - getStartAngle(d) );
         return isNaN(angle) || angle < _minAngleForLabel;
     }
 
     function sliceHasNoData (d) {
-        if (d.data) {
-            return _chart.cappedValueAccessor(d.data) === 0;
+        if ( _chart.hasOwnProperty('sliceHasNoData') ) {
+            return _chart.sliceHasNoData(d);
         }
-        return _chart.cappedValueAccessor(d) === 0;
+        return _chart.cappedValueAccessor(d.data) === 0;
     }
 
-    function tweenFn (d) {
-        var id = this;
-        if (_chart.tweenType === 'pie') {
-            return tweenPie(d, id);
-        }
-        return tweenSlice(d, id);
-    }
+    function tweenFn (d) {}
 
-    function tweenPie (b, id) {
+    function tweenPie (b) {
         b.innerRadius = _innerRadius;
-        var current = id._current;
+        var current = this._current;
         if (isOffCanvas(current)) {
             current = {startAngle: 0, endAngle: 0};
         } else {
@@ -576,34 +607,37 @@ dc.pieTypeMixin = function (_chart) {
             current = {startAngle: current.startAngle, endAngle: current.endAngle};
         }
         var i = d3.interpolate(current, b);
-        id._current = i(0);
+        this._current = i(0);
         return function (t) {
             return safeArc(i(t), 0, buildArcs());
         };
     }
 
-    function tweenSlice (b, id) {
+    function tweenSlice (b) {
         b.innerRadius = _innerRadius; //?
-        var current = id._current;
-        if (isOffCanvas(current)) {
+        var current = this._current;
+        if (_chart.isOffCanvas(current)) {
             current = {x: 0, y: 0, dx: 0, dy: 0};
         }
         // unfortunately, we can't tween an entire hierarchy since it has 2 way links.
         var tweenTarget = {x: b.x, y: b.y, dx: b.dx, dy: b.dy};
         var i = d3.interpolate(current, tweenTarget);
-        id._current = i(0);
+        this._current = i(0);
         return function (t) {
             return safeArc(Object.assign({}, b, i(t)), 0, buildArcs());
         };
     }
 
-    function isOffCanvas (current) {
-        return !current || isNaN(current.startAngle) || isNaN(current.endAngle);
+    function isOffCanvas (d) {
+        if ( _chart.hasOwnProperty('isOffCanvas') ) {
+            return _chart.isOffCanvas(d);
+        }
+        return !d || isNaN(getStartAngle(d)) || isNaN(getEndAngle(d));
     }
 
     // from sunburst
-//     function isOffCanvas (current) {
-//         return !current || isNaN(current.dx) || isNaN(current.dy);
+//     function isOffCanvasSlice (d) {
+//         return !d || isNaN(d.dx) || isNaN(d.dy);
 //     }
 
     function fill (d, i) {
@@ -612,9 +646,21 @@ dc.pieTypeMixin = function (_chart) {
 
     function onClick (d, i) {
         if (_g.attr('class') !== _emptyCssClass) {
-            _chart.onClick(d.data, i);
+//             if (chart.hasOwnProperty('__clickHandler')) {
+//                 _chart.__clickHandler(d,i);
+//             }
+//             else {
+                _chart.onClick(d.data, i);
+//             }
         }
     }
+
+    function onClickSlice (d, i) {
+        if (_g.attr('class') !== _emptyCssClass) {
+            _chart.__clickHandler(d, i);
+        }
+    }
+
 
     function safeArc (d, i, arc) {
         var path = arc(d, i);
@@ -630,7 +676,24 @@ dc.pieTypeMixin = function (_chart) {
             centroid = d3.arc()
                 .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
-                .centroid( d.hasOwnProperty('x1') ? { startAngle: d.x0, endAngle: d.x1 } : d );
+                .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
+        } else {
+            centroid = arc.centroid(d);
+        }
+        if (isNaN(centroid[0]) || isNaN(centroid[1])) {
+            return 'translate(0,0)';
+        } else {
+            return 'translate(' + centroid + ')';
+        }
+    }
+
+    function labelPositionSlice (d, arc) {
+        var centroid;
+        if (_externalLabelRadius && d.height === 0) {
+            centroid = d3.arc()
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
         } else {
             centroid = arc.centroid(d);
         }

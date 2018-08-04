@@ -70,6 +70,8 @@ dc.pieChart = function (parent, chartGroup) {
      * @returns {Number|dc.pieChart}
      */
     _chart.slicesCap = _chart.cap;
+
+    _chart.tweenType = 'pie';
 /*
     _chart.label(_chart.cappedKeyAccessor);
     _chart.renderLabel(true);
@@ -98,10 +100,24 @@ dc.pieChart = function (parent, chartGroup) {
         return _chart;
     };
 */
-    _chart.layout = function () {
+    function layout () {
         return d3.pie().sort(null).value(_chart.cappedValueAccessor);
     }
 
+    function emptyData () {
+        return [{ key: _chart.emptyTitle(), value: 1, others: [_chart.emptyTitle()] }];
+    }
+
+    _chart.prepareData = function ( chartData, emptyChart ) {
+        // if we have data...
+        if ( ! emptyChart ) {
+            return layout()( chartData );
+        } else {
+            // otherwise we'd be getting NaNs, so override
+            // note: abuse others for its ignoring the value accessor
+            return layout()( emptyData() );
+        }
+    }
 
 //     function prepareData () {
 //         var chartData = _chart.data();
@@ -517,6 +533,13 @@ dc.pieChart = function (parent, chartGroup) {
         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
     };
 
+    _chart.labelText = function (d) {
+        if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+            return '';
+        }
+        return _chart.label()(d.data);
+    }
+
 //     function sliceTooSmall (d) {
 //         var angle;
 //         if ( d.hasOwnProperty('x0') ) {
@@ -528,9 +551,9 @@ dc.pieChart = function (parent, chartGroup) {
 //         return isNaN(angle) || angle < _minAngleForLabel;
 //     }
 //
-//     function sliceHasNoData (d) {
-//         return _chart.cappedValueAccessor(d) === 0;
-//     }
+    function sliceHasNoData (d) {
+        return _chart.cappedValueAccessor(d) === 0;
+    }
 //
 //     function tweenFn (d) {
 //         var id = this;
