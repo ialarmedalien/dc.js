@@ -33,16 +33,11 @@ chart.width(300)
         * [.defaultColors([colors])](#dc.config+defaultColors) ⇒ <code>Array</code> \| [<code>config</code>](#dc.config)
     * [.pieChart](#dc.pieChart)
         * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
-        * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
-        * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
-        * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
-    * [.pieChart](#dc.pieChart)
-        * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
-        * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
         * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
         * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
     * [.sunburstChart](#dc.sunburstChart)
         * [new sunburstChart(parent, [chartGroup])](#new_dc.sunburstChart_new)
+        * [.__clickHandler([d])](#dc.sunburstChart+__clickHandler)
     * [.barChart](#dc.barChart)
         * [new barChart(parent, [chartGroup])](#new_dc.barChart_new)
         * [.centerBar([centerBar])](#dc.barChart+centerBar) ⇒ <code>Boolean</code> \| [<code>barChart</code>](#dc.barChart)
@@ -325,6 +320,16 @@ chart.width(300)
         * [.minRadiusWithLabel([radius])](#dc.bubbleMixin+minRadiusWithLabel) ⇒ <code>Number</code> \| [<code>bubbleMixin</code>](#dc.bubbleMixin)
         * [.maxBubbleRelativeSize([relativeSize])](#dc.bubbleMixin+maxBubbleRelativeSize) ⇒ <code>Number</code> \| [<code>bubbleMixin</code>](#dc.bubbleMixin)
     * [.legendableMixin](#dc.legendableMixin) ⇒ [<code>legendableMixin</code>](#dc.legendableMixin)
+    * [.pieTypeMixin](#dc.pieTypeMixin) ⇒ [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.externalRadiusPadding([externalRadiusPadding])](#dc.pieTypeMixin+externalRadiusPadding) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.innerRadius([innerRadius])](#dc.pieTypeMixin+innerRadius) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.radius([radius])](#dc.pieTypeMixin+radius) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.cx([cx])](#dc.pieTypeMixin+cx) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.cy([cy])](#dc.pieTypeMixin+cy) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.minAngleForLabel([minAngleForLabel])](#dc.pieTypeMixin+minAngleForLabel) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.externalLabels([externalLabelRadius])](#dc.pieTypeMixin+externalLabels) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.drawPaths([drawPaths])](#dc.pieTypeMixin+drawPaths) ⇒ <code>Boolean</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
     * [.hierarchyMixin](#dc.hierarchyMixin) ⇒ [<code>hierarchyMixin</code>](#dc.hierarchyMixin)
         * [.__clickHandler([d])](#dc.hierarchyMixin.__clickHandler)
     * [.partitionMixin](#dc.partitionMixin) ⇒ [<code>partitionMixin</code>](#dc.partitionMixin)
@@ -513,121 +518,9 @@ dc.config.defaultColors(d3.schemeSet1)
 
 * [.pieChart](#dc.pieChart)
     * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
-    * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
     * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
     * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
 
-<a name="new_dc.pieChart_new"></a>
-
-#### new pieChart(parent, [chartGroup])
-The pie chart implementation is usually used to visualize a small categorical distribution.  The pie
-chart uses keyAccessor to determine the slices, and valueAccessor to calculate the size of each
-slice relative to the sum of all values. Slices are ordered by [ordering](#dc.baseMixin+ordering)
-which defaults to sorting by key.
-
-Examples:
-- [Nasdaq 100 Index](http://dc-js.github.com/dc.js/)
-
-
-| Param | Type | Description |
-| --- | --- | --- |
-| parent | <code>String</code> \| <code>node</code> \| <code>d3.selection</code> | Any valid [d3 single selector](https://github.com/d3/d3-selection/blob/master/README.md#select) specifying a dom block element such as a div; or a dom element or d3 selection. |
-| [chartGroup] | <code>String</code> | The name of the chart group this chart instance should be placed in. Interaction with a chart will only trigger events and redraws within the chart's group. |
-
-**Example**  
-```js
-// create a pie chart under #chart-container1 element using the default global chart group
-var chart1 = dc.pieChart('#chart-container1');
-// create a pie chart under #chart-container2 element using chart group A
-var chart2 = dc.pieChart('#chart-container2', 'chartGroupA');
-```
-<a name="new_dc.pieChart_new"></a>
-
-#### new pieChart(parent, [chartGroup])
-The pie chart implementation is usually used to visualize a small categorical distribution.  The pie
-chart uses keyAccessor to determine the slices, and valueAccessor to calculate the size of each
-slice relative to the sum of all values. Slices are ordered by [ordering](#dc.baseMixin+ordering)
-which defaults to sorting by key.
-
-Examples:
-- [Nasdaq 100 Index](http://dc-js.github.com/dc.js/)
-
-
-| Param | Type | Description |
-| --- | --- | --- |
-| parent | <code>String</code> \| <code>node</code> \| <code>d3.selection</code> | Any valid [d3 single selector](https://github.com/d3/d3-selection/blob/master/README.md#select) specifying a dom block element such as a div; or a dom element or d3 selection. |
-| [chartGroup] | <code>String</code> | The name of the chart group this chart instance should be placed in. Interaction with a chart will only trigger events and redraws within the chart's group. |
-
-**Example**  
-```js
-// create a pie chart under #chart-container1 element using the default global chart group
-var chart1 = dc.pieChart('#chart-container1');
-// create a pie chart under #chart-container2 element using chart group A
-var chart2 = dc.pieChart('#chart-container2', 'chartGroupA');
-```
-<a name="dc.pieChart+slicesCap"></a>
-
-#### pieChart.slicesCap([cap]) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
-Get or set the maximum number of slices the pie chart will generate. The top slices are determined by
-value from high to low. Other slices exeeding the cap will be rolled up into one single *Others* slice.
-
-**Kind**: instance method of [<code>pieChart</code>](#dc.pieChart)  
-
-| Param | Type |
-| --- | --- |
-| [cap] | <code>Number</code> | 
-
-<a name="dc.pieChart+slicesCap"></a>
-
-#### pieChart.slicesCap([cap]) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
-Get or set the maximum number of slices the pie chart will generate. The top slices are determined by
-value from high to low. Other slices exeeding the cap will be rolled up into one single *Others* slice.
-
-**Kind**: instance method of [<code>pieChart</code>](#dc.pieChart)  
-**Returns**: <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart) - // pie chart only?
-
-    _chart.slicesCap = _chart.cap;  
-
-| Param | Type |
-| --- | --- |
-| [cap] | <code>Number</code> | 
-
-<a name="dc.pieChart"></a>
-
-### dc.pieChart
-**Kind**: static class of [<code>dc</code>](#dc)  
-**Mixes**: [<code>capMixin</code>](#dc.capMixin), [<code>colorMixin</code>](#dc.colorMixin), [<code>baseMixin</code>](#dc.baseMixin)  
-
-* [.pieChart](#dc.pieChart)
-    * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
-    * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
-    * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
-    * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
-
-<a name="new_dc.pieChart_new"></a>
-
-#### new pieChart(parent, [chartGroup])
-The pie chart implementation is usually used to visualize a small categorical distribution.  The pie
-chart uses keyAccessor to determine the slices, and valueAccessor to calculate the size of each
-slice relative to the sum of all values. Slices are ordered by [ordering](#dc.baseMixin+ordering)
-which defaults to sorting by key.
-
-Examples:
-- [Nasdaq 100 Index](http://dc-js.github.com/dc.js/)
-
-
-| Param | Type | Description |
-| --- | --- | --- |
-| parent | <code>String</code> \| <code>node</code> \| <code>d3.selection</code> | Any valid [d3 single selector](https://github.com/d3/d3-selection/blob/master/README.md#select) specifying a dom block element such as a div; or a dom element or d3 selection. |
-| [chartGroup] | <code>String</code> | The name of the chart group this chart instance should be placed in. Interaction with a chart will only trigger events and redraws within the chart's group. |
-
-**Example**  
-```js
-// create a pie chart under #chart-container1 element using the default global chart group
-var chart1 = dc.pieChart('#chart-container1');
-// create a pie chart under #chart-container2 element using chart group A
-var chart2 = dc.pieChart('#chart-container2', 'chartGroupA');
-```
 <a name="new_dc.pieChart_new"></a>
 
 #### new pieChart(parent, [chartGroup])
@@ -683,7 +576,12 @@ value from high to low. Other slices exeeding the cap will be rolled up into one
 
 ### dc.sunburstChart
 **Kind**: static class of [<code>dc</code>](#dc)  
-**Mixes**: [<code>capMixin</code>](#dc.capMixin), [<code>colorMixin</code>](#dc.colorMixin), [<code>baseMixin</code>](#dc.baseMixin)  
+**Mixes**: [<code>partitionMixin</code>](#dc.partitionMixin), [<code>hierarchyMixin</code>](#dc.hierarchyMixin), [<code>legendableMixin</code>](#dc.legendableMixin), [<code>capMixin</code>](#dc.capMixin), [<code>colorMixin</code>](#dc.colorMixin), [<code>baseMixin</code>](#dc.baseMixin)  
+
+* [.sunburstChart](#dc.sunburstChart)
+    * [new sunburstChart(parent, [chartGroup])](#new_dc.sunburstChart_new)
+    * [.__clickHandler([d])](#dc.sunburstChart+__clickHandler)
+
 <a name="new_dc.sunburstChart_new"></a>
 
 #### new sunburstChart(parent, [chartGroup])
@@ -709,6 +607,22 @@ var chart1 = dc.sunburstChart('#chart-container1');
 // create a sunburst chart under #chart-container2 element using chart group A
 var chart2 = dc.sunburstChart('#chart-container2', 'chartGroupA');
 ```
+<a name="dc.sunburstChart+__clickHandler"></a>
+
+#### sunburstChart.__clickHandler([d])
+Hierarchy click handling
+
+The argument is the data from the item clicked upon; the click handler
+checks whether the item is currently filtered or not. Triggers a chart
+re-draw.
+
+**Kind**: instance method of [<code>sunburstChart</code>](#dc.sunburstChart)  
+**Mixes**: [<code>__clickHandler</code>](#dc.hierarchyMixin.__clickHandler)  
+
+| Param | Type |
+| --- | --- |
+| [d] | <code>Object</code> | 
+
 <a name="dc.barChart"></a>
 
 ### dc.barChart
@@ -5568,6 +5482,142 @@ requires the target graph to have .sliceCssClass set
 | Param | Type |
 | --- | --- |
 | _chart | <code>Object</code> | 
+
+<a name="dc.pieTypeMixin"></a>
+
+### dc.pieTypeMixin ⇒ [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+functions and variables for pie-type charts, including the pie chart and the
+sunburst chart.
+
+Charts consuming this mixin are assumed to be pie-like; for sunburst-type
+charts, the _chart object should have a _chart.tweenType = 'slice'.
+
+Consuming charts should supply a _chart.prepareData( chartData, bool ) function
+that takes _chart.data() and a boolean and returns the data appropriately
+formatted and laid out using one of the d3 layout algorithms.
+
+**Kind**: static mixin of [<code>dc</code>](#dc)  
+
+| Param | Type |
+| --- | --- |
+| _chart | <code>Object</code> | 
+
+
+* [.pieTypeMixin](#dc.pieTypeMixin) ⇒ [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.externalRadiusPadding([externalRadiusPadding])](#dc.pieTypeMixin+externalRadiusPadding) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.innerRadius([innerRadius])](#dc.pieTypeMixin+innerRadius) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.radius([radius])](#dc.pieTypeMixin+radius) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.cx([cx])](#dc.pieTypeMixin+cx) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.cy([cy])](#dc.pieTypeMixin+cy) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.minAngleForLabel([minAngleForLabel])](#dc.pieTypeMixin+minAngleForLabel) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.externalLabels([externalLabelRadius])](#dc.pieTypeMixin+externalLabels) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.drawPaths([drawPaths])](#dc.pieTypeMixin+drawPaths) ⇒ <code>Boolean</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+
+<a name="dc.pieTypeMixin+externalRadiusPadding"></a>
+
+#### pieTypeMixin.externalRadiusPadding([externalRadiusPadding]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set the external radius padding of the chart. This will force the radius of the
+chart to become smaller or larger depending on the value.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type | Default |
+| --- | --- | --- |
+| [externalRadiusPadding] | <code>Number</code> | <code>0</code> | 
+
+<a name="dc.pieTypeMixin+innerRadius"></a>
+
+#### pieTypeMixin.innerRadius([innerRadius]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set the inner radius of the chart. If the inner radius is greater than 0px then the
+chart will be rendered as a doughnut chart. Default inner radius is 0px.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type | Default |
+| --- | --- | --- |
+| [innerRadius] | <code>Number</code> | <code>0</code> | 
+
+<a name="dc.pieTypeMixin+radius"></a>
+
+#### pieTypeMixin.radius([radius]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set the outer radius. If the radius is not set, it will be half of the minimum of the
+chart width and height.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [radius] | <code>Number</code> | 
+
+<a name="dc.pieTypeMixin+cx"></a>
+
+#### pieTypeMixin.cx([cx]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set center x coordinate position. Default is center of svg.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [cx] | <code>Number</code> | 
+
+<a name="dc.pieTypeMixin+cy"></a>
+
+#### pieTypeMixin.cy([cy]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set center y coordinate position. Default is center of svg.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [cy] | <code>Number</code> | 
+
+<a name="dc.pieTypeMixin+minAngleForLabel"></a>
+
+#### pieTypeMixin.minAngleForLabel([minAngleForLabel]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set the minimal slice angle for label rendering. Any slice with a smaller angle will not
+display a slice label.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type | Default |
+| --- | --- | --- |
+| [minAngleForLabel] | <code>Number</code> | <code>0.5</code> | 
+
+<a name="dc.pieTypeMixin+emptyTitle"></a>
+
+#### pieTypeMixin.emptyTitle([title]) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Title to use for the only slice when there is no data.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [title] | <code>String</code> | 
+
+<a name="dc.pieTypeMixin+externalLabels"></a>
+
+#### pieTypeMixin.externalLabels([externalLabelRadius]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Position slice labels offset from the outer edge of the chart.
+
+The argument specifies the extra radius to be added for slice labels.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [externalLabelRadius] | <code>Number</code> | 
+
+<a name="dc.pieTypeMixin+drawPaths"></a>
+
+#### pieTypeMixin.drawPaths([drawPaths]) ⇒ <code>Boolean</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set whether to draw lines from slices to their labels.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [drawPaths] | <code>Boolean</code> | 
 
 <a name="dc.hierarchyMixin"></a>
 

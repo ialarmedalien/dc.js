@@ -1,27 +1,19 @@
 /**
- * The pie chart implementation is usually used to visualize a small categorical distribution.  The pie
- * chart uses keyAccessor to determine the slices, and valueAccessor to calculate the size of each
- * slice relative to the sum of all values. Slices are ordered by {@link dc.baseMixin#ordering ordering}
- * which defaults to sorting by key.
+ * functions and variables for pie-type charts, including the pie chart and the
+ * sunburst chart.
  *
- * Examples:
- * - {@link http://dc-js.github.com/dc.js/ Nasdaq 100 Index}
- * @class pieChart
+ * Charts consuming this mixin are assumed to be pie-like; for sunburst-type
+ * charts, the _chart object should have a _chart.tweenType = 'slice'.
+ *
+ * Consuming charts should supply a _chart.prepareData( chartData, bool ) function
+ * that takes _chart.data() and a boolean and returns the data appropriately
+ * formatted and laid out using one of the d3 layout algorithms.
+ *
+ * @name pieTypeMixin
  * @memberof dc
- * @mixes dc.capMixin
- * @mixes dc.colorMixin
- * @mixes dc.baseMixin
- * @example
- * // create a pie chart under #chart-container1 element using the default global chart group
- * var chart1 = dc.pieChart('#chart-container1');
- * // create a pie chart under #chart-container2 element using chart group A
- * var chart2 = dc.pieChart('#chart-container2', 'chartGroupA');
- * @param {String|node|d3.selection} parent - Any valid
- * {@link https://github.com/d3/d3-selection/blob/master/README.md#select d3 single selector} specifying
- * a dom block element such as a div; or a dom element or d3 selection.
- * @param {String} [chartGroup] - The name of the chart group this chart instance should be placed in.
- * Interaction with a chart will only trigger events and redraws within the chart's group.
- * @returns {dc.pieChart}
+ * @mixin
+ * @param {Object} _chart
+ * @returns {dc.pieTypeMixin}
  */
 dc.pieTypeMixin = function (_chart) {
     var DEFAULT_MIN_ANGLE_FOR_LABEL = 0.5;

@@ -10,6 +10,9 @@
  *
  * @class sunburstChart
  * @memberof dc
+ * @mixes dc.partitionMixin
+ * @mixes dc.hierarchyMixin
+ * @mixes dc.legendableMixin
  * @mixes dc.capMixin
  * @mixes dc.colorMixin
  * @mixes dc.baseMixin

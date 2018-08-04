@@ -96,6 +96,7 @@ dc.hierarchyMixin = function (_chart) {
     // formatting data for a hierarchical graph
     // converts a flat array of data into a hierarchy using the key field
     // if there are missing parents, _chart.stratify will fill them in
+
     _chart.formatData = function ( chartData, layout ) {
 
         var cdata = _chart.stratify( chartData, _chart.keyAccessor() );

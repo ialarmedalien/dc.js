@@ -5479,17 +5479,6 @@ dc.pieChart = function (parent, chartGroup) {
         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
     };
 
-    _chart.labelText = function (d) {
-        if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
-            return '';
-        }
-        return _chart.label()(d.data);
-    }
-
-    function sliceHasNoData (d) {
-        return _chart.cappedValueAccessor(d) === 0;
-    }
-
     return _chart.anchor(parent, chartGroup);
 };
 
@@ -5544,29 +5533,21 @@ dc.legendableMixin = function (_chart) {
 };
 
 /**
- * The pie chart implementation is usually used to visualize a small categorical distribution.  The pie
- * chart uses keyAccessor to determine the slices, and valueAccessor to calculate the size of each
- * slice relative to the sum of all values. Slices are ordered by {@link dc.baseMixin#ordering ordering}
- * which defaults to sorting by key.
+ * functions and variables for pie-type charts, including the pie chart and the
+ * sunburst chart.
  *
- * Examples:
- * - {@link http://dc-js.github.com/dc.js/ Nasdaq 100 Index}
- * @class pieChart
+ * Charts consuming this mixin are assumed to be pie-like; for sunburst-type
+ * charts, the _chart object should have a _chart.tweenType = 'slice'.
+ *
+ * Consuming charts should supply a _chart.prepareData( chartData, bool ) function
+ * that takes _chart.data() and a boolean and returns the data appropriately
+ * formatted and laid out using one of the d3 layout algorithms.
+ *
+ * @name pieTypeMixin
  * @memberof dc
- * @mixes dc.capMixin
- * @mixes dc.colorMixin
- * @mixes dc.baseMixin
- * @example
- * // create a pie chart under #chart-container1 element using the default global chart group
- * var chart1 = dc.pieChart('#chart-container1');
- * // create a pie chart under #chart-container2 element using chart group A
- * var chart2 = dc.pieChart('#chart-container2', 'chartGroupA');
- * @param {String|node|d3.selection} parent - Any valid
- * {@link https://github.com/d3/d3-selection/blob/master/README.md#select d3 single selector} specifying
- * a dom block element such as a div; or a dom element or d3 selection.
- * @param {String} [chartGroup] - The name of the chart group this chart instance should be placed in.
- * Interaction with a chart will only trigger events and redraws within the chart's group.
- * @returns {dc.pieChart}
+ * @mixin
+ * @param {Object} _chart
+ * @returns {dc.pieTypeMixin}
  */
 dc.pieTypeMixin = function (_chart) {
     var DEFAULT_MIN_ANGLE_FOR_LABEL = 0.5;
@@ -6322,6 +6303,7 @@ dc.hierarchyMixin = function (_chart) {
     // formatting data for a hierarchical graph
     // converts a flat array of data into a hierarchy using the key field
     // if there are missing parents, _chart.stratify will fill them in
+
     _chart.formatData = function ( chartData, layout ) {
 
         var cdata = _chart.stratify( chartData, _chart.keyAccessor() );
@@ -6417,12 +6399,14 @@ dc.hierarchyMixin = function (_chart) {
  */
 dc.partitionMixin = function (_chart) {
 
+    //
+
     _chart.prepareData = function ( chartData, emptyChart ) {
         var dataWithLayout;
         // if we have data...
         if ( ! emptyChart ) {
             dataWithLayout = _chart.formatData( chartData, _chart.layout() );
-            // First one is the root, which is not needed
+            // partition charts do not need the root node, so shift it off
             dataWithLayout.shift();
         } else {
             // just the root node
@@ -6446,6 +6430,9 @@ dc.partitionMixin = function (_chart) {
  *
  * @class sunburstChart
  * @memberof dc
+ * @mixes dc.partitionMixin
+ * @mixes dc.hierarchyMixin
+ * @mixes dc.legendableMixin
  * @mixes dc.capMixin
  * @mixes dc.colorMixin
  * @mixes dc.baseMixin

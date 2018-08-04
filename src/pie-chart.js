@@ -67,16 +67,5 @@ dc.pieChart = function (parent, chartGroup) {
         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
     };
 
-    _chart.labelText = function (d) {
-        if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
-            return '';
-        }
-        return _chart.label()(d.data);
-    }
-
-    function sliceHasNoData (d) {
-        return _chart.cappedValueAccessor(d) === 0;
-    }
-
     return _chart.anchor(parent, chartGroup);
 };
