@@ -89,13 +89,13 @@ dc.hierarchyMixin = function (_chart) {
             });
         }
     };
-
-    function _onClick (d) {
+*/
+    _chart.__clickHandler = function (d) {
         var path = d.key;
         var filter = dc.filters.HierarchyFilter(path);
 
         // filters are equal to, parents or children of the path.
-        var filters = filtersForPath(path);
+        var filters = _chart.filtersForPath(path);
         var exactMatch = false;
         // clear out any filters that cover the path filtered.
         for (var i = filters.length - 1; i >= 0; i--) {
@@ -112,7 +112,8 @@ dc.hierarchyMixin = function (_chart) {
             }
             _chart.redrawGroup();
         });
-    };
+    }
+//    _chart.__clickHandler = _onClick;
 
 //     _chart.onClick = _onClick;
 //
@@ -130,7 +131,6 @@ dc.hierarchyMixin = function (_chart) {
 //    else if (isNaN(b)) return -1;//only b is a string
 //    else return a-b;//both are num
 //  }
-*/
 
     _chart.prepData = function ( chartData, layout ) {
 
