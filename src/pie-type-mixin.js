@@ -39,8 +39,6 @@ dc.pieTypeMixin = function (_chart) {
     var _externalLabelRadius;
     var _drawPaths = false;
 
-//     var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
-
     var startAngleXFn = function (d) {
         return d.x0;
     },
@@ -203,8 +201,16 @@ dc.pieTypeMixin = function (_chart) {
     }
 
     function labelTextSlice (d) {
-        if ((datumValueIsZero(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
-            return '';
+        if (!_chart.isSelectedSlice(d)) {
+            if ( datumValueIsZero(d) ) {
+                return '';
+            }
+            if ( sliceTooSmall(d) ) {
+                if ( d.height === 0 && _externalLabelRadius ) {
+                    return _chart.label()(d);
+                }
+                return '';
+            }
         }
         return _chart.label()(d);
     }

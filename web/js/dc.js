@@ -5573,8 +5573,6 @@ dc.pieTypeMixin = function (_chart) {
     var _externalLabelRadius;
     var _drawPaths = false;
 
-//     var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
-
     var startAngleXFn = function (d) {
         return d.x0;
     },
@@ -5737,8 +5735,16 @@ dc.pieTypeMixin = function (_chart) {
     }
 
     function labelTextSlice (d) {
-        if ((datumValueIsZero(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
-            return '';
+        if (!_chart.isSelectedSlice(d)) {
+            if ( datumValueIsZero(d) ) {
+                return '';
+            }
+            if ( sliceTooSmall(d) ) {
+                if ( d.height === 0 && _externalLabelRadius ) {
+                    return _chart.label()(d);
+                }
+                return '';
+            }
         }
         return _chart.label()(d);
     }
@@ -6306,7 +6312,7 @@ dc.hierarchyMixin = function (_chart) {
 
     _chart.formatData = function ( chartData, layout ) {
 
-        var cdata = _chart.stratify( chartData, _chart.keyAccessor() );
+        var cdata = _chart.stratify( chartData, _chart.cappedKeyAccessor() );
         var maxDepth = 0;
         var nodes = layout( cdata
           .sum( function(d) {
@@ -6339,6 +6345,15 @@ dc.hierarchyMixin = function (_chart) {
         return nodes;
     };
 
+    /**
+     * Convert a flat set of hierarchical data into a tree using d3.stratify
+     *
+     *
+     * @method stratify
+     * @memberof dc.hierarchyMixin
+     * @param {Array} [list]
+     * @param {Function} [key_acc]
+     */
     _chart.stratify = function ( list, key_acc ) {
 
       // if we have data...

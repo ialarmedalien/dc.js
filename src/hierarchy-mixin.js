@@ -99,7 +99,7 @@ dc.hierarchyMixin = function (_chart) {
 
     _chart.formatData = function ( chartData, layout ) {
 
-        var cdata = _chart.stratify( chartData, _chart.keyAccessor() );
+        var cdata = _chart.stratify( chartData, _chart.cappedKeyAccessor() );
         var maxDepth = 0;
         var nodes = layout( cdata
           .sum( function(d) {
@@ -132,6 +132,15 @@ dc.hierarchyMixin = function (_chart) {
         return nodes;
     };
 
+    /**
+     * Convert a flat set of hierarchical data into a tree using d3.stratify
+     *
+     *
+     * @method stratify
+     * @memberof dc.hierarchyMixin
+     * @param {Array} [list]
+     * @param {Function} [key_acc]
+     */
     _chart.stratify = function ( list, key_acc ) {
 
       // if we have data...

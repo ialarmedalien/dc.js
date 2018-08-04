@@ -38,6 +38,7 @@ chart.width(300)
     * [.sunburstChart](#dc.sunburstChart)
         * [new sunburstChart(parent, [chartGroup])](#new_dc.sunburstChart_new)
         * [.__clickHandler([d])](#dc.sunburstChart+__clickHandler)
+        * [.stratify([list], [key_acc])](#dc.sunburstChart+stratify)
     * [.barChart](#dc.barChart)
         * [new barChart(parent, [chartGroup])](#new_dc.barChart_new)
         * [.centerBar([centerBar])](#dc.barChart+centerBar) ⇒ <code>Boolean</code> \| [<code>barChart</code>](#dc.barChart)
@@ -332,6 +333,7 @@ chart.width(300)
         * [.drawPaths([drawPaths])](#dc.pieTypeMixin+drawPaths) ⇒ <code>Boolean</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
     * [.hierarchyMixin](#dc.hierarchyMixin) ⇒ [<code>hierarchyMixin</code>](#dc.hierarchyMixin)
         * [.__clickHandler([d])](#dc.hierarchyMixin.__clickHandler)
+        * [.stratify([list], [key_acc])](#dc.hierarchyMixin.stratify)
     * [.partitionMixin](#dc.partitionMixin) ⇒ [<code>partitionMixin</code>](#dc.partitionMixin)
     * [.disableTransitions](#dc.disableTransitions) : <code>Boolean</code>
     * [.dateFormat](#dc.dateFormat) : <code>function</code>
@@ -581,6 +583,7 @@ value from high to low. Other slices exeeding the cap will be rolled up into one
 * [.sunburstChart](#dc.sunburstChart)
     * [new sunburstChart(parent, [chartGroup])](#new_dc.sunburstChart_new)
     * [.__clickHandler([d])](#dc.sunburstChart+__clickHandler)
+    * [.stratify([list], [key_acc])](#dc.sunburstChart+stratify)
 
 <a name="new_dc.sunburstChart_new"></a>
 
@@ -622,6 +625,19 @@ re-draw.
 | Param | Type |
 | --- | --- |
 | [d] | <code>Object</code> | 
+
+<a name="dc.sunburstChart+stratify"></a>
+
+#### sunburstChart.stratify([list], [key_acc])
+Convert a flat set of hierarchical data into a tree using d3.stratify
+
+**Kind**: instance method of [<code>sunburstChart</code>](#dc.sunburstChart)  
+**Mixes**: [<code>stratify</code>](#dc.hierarchyMixin.stratify)  
+
+| Param | Type |
+| --- | --- |
+| [list] | <code>Array</code> | 
+| [key_acc] | <code>function</code> | 
 
 <a name="dc.barChart"></a>
 
@@ -5632,6 +5648,11 @@ When filtering, the hierarchical chart creates instances of [HierarchyFilter](#d
 | --- | --- |
 | _chart | <code>Object</code> | 
 
+
+* [.hierarchyMixin](#dc.hierarchyMixin) ⇒ [<code>hierarchyMixin</code>](#dc.hierarchyMixin)
+    * [.__clickHandler([d])](#dc.hierarchyMixin.__clickHandler)
+    * [.stratify([list], [key_acc])](#dc.hierarchyMixin.stratify)
+
 <a name="dc.hierarchyMixin.__clickHandler"></a>
 
 #### hierarchyMixin.__clickHandler([d])
@@ -5646,6 +5667,18 @@ re-draw.
 | Param | Type |
 | --- | --- |
 | [d] | <code>Object</code> | 
+
+<a name="dc.hierarchyMixin.stratify"></a>
+
+#### hierarchyMixin.stratify([list], [key_acc])
+Convert a flat set of hierarchical data into a tree using d3.stratify
+
+**Kind**: static method of [<code>hierarchyMixin</code>](#dc.hierarchyMixin)  
+
+| Param | Type |
+| --- | --- |
+| [list] | <code>Array</code> | 
+| [key_acc] | <code>function</code> | 
 
 <a name="dc.partitionMixin"></a>
 

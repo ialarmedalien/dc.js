@@ -71,12 +71,17 @@ d3.csv("morley.csv").then(function(experiments) {
         .group(runOnlySpeedGroup);
 
     chart
-        .width(768)
-        .height(480)
-        .innerRadius(100)
+        .width(800)
+        .height(600)
+        .innerRadius(50)
         .dimension(runDimension)
         .group(speedSumGroup)
-        .legend(dc.legend());
+        .legend(dc.legend())
+        .externalLabels(50)
+        .externalRadiusPadding(10)
+        .drawPaths(true)
+        .cap(50)
+        ;
 
     dc.renderAll();
 
