@@ -99,15 +99,16 @@ dc.hierarchyMixin = function (_chart) {
 
     _chart.formatData = function ( chartData, layout ) {
 
-        var cdata = _chart.stratify( chartData, _chart.cappedKeyAccessor() );
+        var cdata = _chart.stratify( chartData, _chart.keyAccessor() );
         var maxDepth = 0;
-        var nodes = layout( cdata
-          .sum( function(d) {
-              return _chart.cappedValueAccessor(d);
-          })
-          .sort(function (a, b) {
-              return d3.ascending( _chart.ordering()(a), _chart.ordering()(b) );
-          })
+        var nodes = layout(
+            cdata
+              .sum( function(d) {
+                  return _chart._cappedValueAccessor(d) || 0;
+              })
+              .sort(function (a, b) {
+                  return d3.ascending( _chart.ordering()(a), _chart.ordering()(b) );
+              })
         )
         .descendants()
         .map(function (d) {
@@ -149,7 +150,7 @@ dc.hierarchyMixin = function (_chart) {
         return { data: x, ix: key_acc(x).join("\0") }
       }).sort( function( x, y ) {
         return x.ix === y.ix ? 0 : x.ix > y.ix
-      } )
+      })
       .map( function(x){
         return x.data
       })
