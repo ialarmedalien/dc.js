@@ -66,9 +66,12 @@ d3.tsv("cat.tsv").then(function (cats) {
     typeChart
         .width(200)
         .height(200)
-        .innerRadius(50)
+        .innerRadius(25)
         .dimension(typeDimension)
-        .group(typeGroup);
+        .group(typeGroup)
+        .drawPaths(true)
+        .externalRadiusPadding(50)
+        .externalLabels(25);
 
     dc.renderAll();
 });

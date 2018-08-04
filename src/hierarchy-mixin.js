@@ -7,24 +7,11 @@
  * @memberof dc
  * @mixin
  * @param {Object} _chart
- * @returns {dc.baseMixin}
+ * @returns {dc.hierarchyMixin}
  */
 dc.hierarchyMixin = function (_chart) {
-//     Handle cases if value corresponds to generated parent nodes
-//     _chart.extendedValueAccessor = function (d) {
-//         try {
-//             return _chart.cappedValueAccessor(d)
-//         }
-//         catch (e) {
-//             return d.value || 0
-//         }
-//         return _chart.cappedValueAccessor(d);
-//     };
 
-//     _chart.title(function (d) {
-//         return _chart.cappedKeyAccessor(d) + ': ' + _chart.extendedValueAccessor(d);
-//     });
-
+    // filters for hierarchical graphs
     _chart.filterHandler(function (dimension, filters) {
         if (filters.length === 0) {
             dimension.filter(null);
@@ -58,7 +45,6 @@ dc.hierarchyMixin = function (_chart) {
 
 //  returns all filters that are a parent or child of the path
     _chart.filtersForPath = function (path) {
-//    function filtersForPath (path) {
         var pathFilter = dc.filters.HierarchyFilter(path);
         var filters = [];
         for (var i = 0; i < _chart.filters().length; i++) {
@@ -70,26 +56,19 @@ dc.hierarchyMixin = function (_chart) {
         return filters;
     }
 
-/*
+    /**
+     * Hierarchy click handling
+     *
+     * The argument is the data from the item clicked upon; the click handler
+     * checks whether the item is currently filtered or not. Triggers a chart
+     * re-draw.
+     *
+     * @method __clickHandler
+     * @memberof dc.hierarchyMixin
+     * @param {Object} [d]
+     */
 
-    // in pie-type-mixin
-//    function highlightFilter () {
-    _chart.highlightFilter = function() {
-        if (_chart.hasFilter()) {
-            _chart.selectAll('g.' + _chart.sliceCssClass).each(function (d) {
-                if (isSelectedSlice(d)) {
-                    _chart.highlightSelected(this);
-                } else {
-                    _chart.fadeDeselected(this);
-                }
-            });
-        } else {
-            _chart.selectAll('g.' + _chart.sliceCssClass).each(function (d) {
-                _chart.resetHighlight(this);
-            });
-        }
-    };
-*/
+
     _chart.__clickHandler = function (d) {
         var path = d.key;
         var filter = dc.filters.HierarchyFilter(path);
@@ -113,38 +92,21 @@ dc.hierarchyMixin = function (_chart) {
             _chart.redrawGroup();
         });
     }
-//    _chart.__clickHandler = _onClick;
 
-//     _chart.onClick = _onClick;
-//
-//     _chart.onClick = onClick;
-//
-//     function onClick (d, i) {
-//         if (_g.attr('class') !== _emptyCssClass) {
-//             _onClick(d, i);
-//         }
-//     }
+    // formatting data for a hierarchical graph
+    // converts a flat array of data into a hierarchy using the key field
+    // if there are missing parents, _chart.stratify will fill them in
+    _chart.formatData = function ( chartData, layout ) {
 
-//  function (a,b){
-//    if ( isNaN(a) && isNaN(b)) return a<b?-1:a==b?0:1;//both are string
-//    else if (isNaN(a)) return 1;//only a is a string
-//    else if (isNaN(b)) return -1;//only b is a string
-//    else return a-b;//both are num
-//  }
-
-    _chart.prepData = function ( chartData, layout ) {
-
-        var cdata = _chart.stratify( chartData, _chart.valueAccessor(), _chart.keyAccessor() );
-
-        cdata
+        var cdata = _chart.stratify( chartData, _chart.keyAccessor() );
+        var maxDepth = 0;
+        var nodes = layout( cdata
           .sum( function(d) {
               return _chart.cappedValueAccessor(d);
           })
           .sort(function (a, b) {
               return d3.ascending( _chart.ordering()(a), _chart.ordering()(b) );
-          });
-        var maxDepth = 0;
-        var nodes = layout( cdata
+          })
         )
         .descendants()
         .map(function (d) {
@@ -169,7 +131,7 @@ dc.hierarchyMixin = function (_chart) {
         return nodes;
     };
 
-    _chart.stratify = function ( list, value_acc, key_acc ) {
+    _chart.stratify = function ( list, key_acc ) {
 
       // if we have data...
       var extras = []

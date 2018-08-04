@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>dc.js - Sunburst Chart Example</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="../css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="../css/dc.css"/>
+    <style>
+        .pie-slice path {
+            stroke:#fff;
+        }
+        .dc-chart .selected path {
+            stroke-width: 1;
+            stroke:#fff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+<script type="text/javascript" src="header.js"></script>
+
+<div id="test-content"></div>
+
+<script type="text/javascript" src="../js/d3.js"></script>
+<script type="text/javascript" src="../js/crossfilter.js"></script>
+<script type="text/javascript" src="../js/dc.js"></script>
+<script type="text/javascript">
+
+function appendChartID (id) {
+    return d3.select('#test-content').append('div').attr('id', id);
+}
+
+function dateCleaner (e) {
+    e.dd = d3.isoParse(e.date);
+}
+
+function loadDateFixture () {
+    var fixture = JSON.parse("[" +
+        "{\"value\":\"44\",\"nvalue\":\"-4\",\"countrycode\":\"US\",\"state\":\"California\",\"status\":\"T\",\"id\":1,\"region\":\"South\",\"date\":\"2012-05-25T16:10:09Z\"}, " +
+        "{\"value\":\"22\",\"nvalue\":\"-2\",\"countrycode\":\"US\",\"state\":\"Colorado\",\"status\":\"F\",\"id\":2,\"region\":\"West\",\"date\":\"2012-06-10T16:10:19Z\"}, " +
+        "{\"value\":\"33\",\"nvalue\":\"1\",\"countrycode\":\"US\",\"state\":\"Delaware\",\"status\":\"T\",\"id\":3,\"region\":\"West\",\"date\":\"2012-08-10T16:20:29Z\"}, " +
+        "{\"value\":\"44\",\"nvalue\":\"-3\",\"countrycode\":\"US\",\"state\":\"California\",\"status\":\"F\",\"id\":4,\"region\":\"South\",\"date\":\"2012-07-01T16:10:39Z\"}, " +
+        "{\"value\":\"55\",\"nvalue\":\"-5\",\"countrycode\":\"CA\",\"state\":\"Ontario\",\"status\":\"T\",\"id\":5,\"region\":\"Central\",\"date\":\"2012-06-10T16:10:49Z\"}, " +
+        "{\"value\":\"66\",\"nvalue\":\"-4\",\"countrycode\":\"US\",\"state\":\"California\",\"status\":\"F\",\"id\":6,\"region\":\"West\",\"date\":\"2012-06-08T16:10:59Z\"}, " +
+        "{\"value\":\"22\",\"nvalue\":\"10\",\"countrycode\":\"CA\",\"state\":\"Ontario\",\"status\":\"T\",\"id\":7,\"region\":\"East\",\"date\":\"2012-07-10T16:10:09Z\"}, " +
+        "{\"value\":\"33\",\"nvalue\":\"1\",\"countrycode\":\"US\",\"state\":\"Mississippi\",\"status\":\"F\",\"id\":8,\"region\":\"Central\",\"date\":\"2012-07-10T16:10:19Z\"}, " +
+        "{\"value\":\"44\",\"nvalue\":\"2\",\"countrycode\":\"US\",\"state\":\"Mississippi\",\"status\":\"T\",\"id\":9,\"region\":\"Central\",\"date\":\"2012-08-10T16:30:29Z\"}, " +
+        "{\"value\":\"55\",\"nvalue\":\"-3\",\"countrycode\":\"US\",\"state\":\"Oklahoma\",\"status\":\"F\",\"id\":10,\"region\":\"\",\"date\":\"2012-06-10T16:10:39Z\"}" +
+        "]");
+
+    fixture.forEach(dateCleaner);
+    return fixture;
+}
+
+function addDomParts (id) {
+    var div = appendChartID(id);
+    div.append('a')
+        .attr('class', 'reset')
+        .style('display', 'none')
+        .attr('href', 'javascript:spenderRowChart.filterAll();dc.redrawAll();');
+    div.append('span').attr('class', 'filter').style('display', 'none');
+}
+
+function addOtherDomParts (id, chart) {
+    var div = d3.select('#' + id);
+    div.append('a')
+        .attr('class', 'reset')
+        .style('display', 'none')
+        .attr('href', 'javascript:' + chart + '.filterAll();dc.redrawAll();');
+    div.append('span').attr('class', 'filter').style('display', 'none');
+
+}
+
+function buildChart (id) {
+    addDomParts(id);
+    var chart = dc.sunburstChart('#' + id);
+    chart.dimension(countryRegionStateDimension).group(countryRegionStateGroup)
+        .width(width)
+        .height(height)
+        .drawPaths(drawPaths);
+
+    if ( extLabelPad ) {
+        chart.externalLabels(extLabelPad);
+
+    }
+
+    if ( extRadPad ) {
+        chart.externalRadiusPadding(extRadPad);
+    }
+
+    if ( legend ) {
+        chart.legend(legend);
+    }
+    chart.render();
+    return chart;
+}
+
+
+var width = 500;
+var height = 500;
+var radius = 100;
+var innerRadius = 0;
+var extRadPad = 0;
+var extLabelPad = 0;
+var drawPaths = false;
+var legend;
+var data, valueDimension, valueGroup;
+var countryRegionStateDimension, countryRegionStateGroup;
+var statusDimension;
+var dateDimension;
+var statusGroup, statusMultiGroup;
+
+data = crossfilter(loadDateFixture());
+valueDimension = data.dimension(function (d) {
+    return d.value;
+});
+valueGroup = valueDimension.group();
+
+countryRegionStateDimension = data.dimension(function (d) {
+    return [d.countrycode, d.region, d.state];
+});
+
+countryRegionStateGroup = countryRegionStateDimension.group();
+
+statusDimension = data.dimension(function (d) {
+    return d.status;
+});
+
+dateDimension = data.dimension(function (d) {
+    return d3.utcDay(d.dd);
+});
+
+statusGroup = statusDimension.group();
+statusMultiGroup = statusGroup.reduce(
+    //add
+    function (p, v) {
+        ++p.count;
+        p.value += +v.value;
+        return p;
+    },
+    //remove
+    function (p, v) {
+        --p.count;
+        p.value -= +v.value;
+        return p;
+    },
+    //init
+    function () {
+        return {count: 0, value: 0};
+    }
+);
+
+var chart = buildChart('burst1');
+    addOtherDomParts('burst1', chart);
+    chart.render();
+    legend = dc.legend();
+    extLabelPad = 50;
+    extRadPad = 100;
+    drawPaths = true;
+var chart2 = buildChart('burst2');
+    chart2.render();
+var chart3 = buildChart('burst3');
+//    statusDimension.filter('E');
+    chart3.render();
+
+</script>
+
+</div>
+</body>
+</html>

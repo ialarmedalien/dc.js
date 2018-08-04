@@ -46,6 +46,7 @@ dc.pieTypeMixin = function (_chart) {
     var _minAngleForLabel = DEFAULT_MIN_ANGLE_FOR_LABEL;
     var _externalLabelRadius;
     var _drawPaths = false;
+
 //     var _chart = dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))));
 
     var startAngleXFn = function (d) {
@@ -75,8 +76,11 @@ dc.pieTypeMixin = function (_chart) {
      * @instance
      * @param {Number} [cap]
      * @returns {Number|dc.pieChart}
-     */
+
+    // pie chart only?
+
     _chart.slicesCap = _chart.cap;
+     */
 
     _chart.label(_chart.cappedKeyAccessor);
     _chart.renderLabel(true);
@@ -86,6 +90,21 @@ dc.pieTypeMixin = function (_chart) {
 
     _chart._doRender = function () {
         _chart.resetSvg();
+
+        if ( _chart.tweenType === 'slice' ) {
+            getStartAngle = startAngleXFn;
+            getEndAngle = endAngleXFn;
+            tweenFn = tweenSlice;
+            buildArcs = buildSliceArcs;
+            labelText = labelTextSlice;
+            labelPosition = labelPositionSlice;
+            onClick = onClickSlice;
+            _chart.onClick = onClickSlice;
+        }
+        else {
+            tweenFn = tweenPie;
+            buildArcs = buildPieArcs;
+        }
 
         _g = _chart.svg()
             .append('g')
@@ -105,40 +124,10 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-    function emptyData () {
-        return [{ key: _emptyTitle, value: 1, others: [_emptyTitle] }];
-    }
-
-    function prepareData ( chartData, emptyChart ) {
-        // if we have data...
-        if ( ! emptyChart ) {
-            return _chart.layout()( chartData );
-        } else {
-            // otherwise we'd be getting NaNs, so override
-            // note: abuse others for its ignoring the value accessor
-            return _chart.layout()( emptyData() );
-        }
-    }
-
     function drawChart () {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
-
-        if ( _chart.tweenType === 'slice' ) {
-            getStartAngle = startAngleXFn;
-            getEndAngle = endAngleXFn;
-            tweenFn = tweenSlice;
-            buildArcs = buildSliceArcs;
-            labelText = labelTextSlice;
-            labelPosition = labelPositionSlice;
-            onClick = onClickSlice;
-            _chart.onClick = onClickSlice;
-        }
-        else {
-            tweenFn = tweenPie;
-            buildArcs = buildPieArcs;
-        }
 
         var arc = buildArcs();
 
@@ -215,25 +204,18 @@ dc.pieTypeMixin = function (_chart) {
     }
 
     function labelText (d) {
-        if ((sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+        if ((datumValueIsZero(d.data) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
             return '';
         }
         return _chart.label()(d.data);
     }
 
     function labelTextSlice (d) {
-        if ((_chart.sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+        if ((datumValueIsZero(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
             return '';
         }
-        return _chart.label()(d.data);
+        return _chart.label()(d);
     }
-    // sunburst version
-//     function labelText (d) {
-//         if ((_chart.sliceHasNoData(d) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
-//             return '';
-//         }
-//         return _chart.label()(d);
-//     }
 
     function positionLabels (labels, arc) {
         dc.transition(labels, _chart.transitionDuration(), _chart.transitionDelay())
@@ -245,7 +227,7 @@ dc.pieTypeMixin = function (_chart) {
     }
 
     function highlightSlice (i, whether) {
-        _chart.select('g.pie-slice._' + i)
+        _chart.select('g.' + _sliceCssClass + '._' + i)
             .classed('highlight', whether);
     }
 
@@ -275,7 +257,6 @@ dc.pieTypeMixin = function (_chart) {
         }
     }
 
-    // differs
     function updateLabelPaths (data, arc) {
         var polyline = _g.select('g.' + _polylineGroupCssClass)
             .selectAll('polyline.' + _polylineCssClass)
@@ -578,21 +559,13 @@ dc.pieTypeMixin = function (_chart) {
             .innerRadius(_innerRadius);
     }
 
-    // very different in sunburstChart!
-//     function isSelectedSlice (d) {
-//         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
-//     }
-
     function sliceTooSmall (d) {
         var angle = ( getEndAngle(d) - getStartAngle(d) );
         return isNaN(angle) || angle < _minAngleForLabel;
     }
 
-    function sliceHasNoData (d) {
-        if ( _chart.hasOwnProperty('sliceHasNoData') ) {
-            return _chart.sliceHasNoData(d);
-        }
-        return _chart.cappedValueAccessor(d.data) === 0;
+    function datumValueIsZero (d) {
+        return _chart.cappedValueAccessor(d) === 0;
     }
 
     function tweenFn (d) {}
@@ -614,7 +587,6 @@ dc.pieTypeMixin = function (_chart) {
     }
 
     function tweenSlice (b) {
-        b.innerRadius = _innerRadius; //?
         var current = this._current;
         if (_chart.isOffCanvas(current)) {
             current = {x: 0, y: 0, dx: 0, dy: 0};
@@ -647,10 +619,10 @@ dc.pieTypeMixin = function (_chart) {
     function onClick (d, i) {
         if (_g.attr('class') !== _emptyCssClass) {
 //             if (chart.hasOwnProperty('__clickHandler')) {
-//                 _chart.__clickHandler(d,i);
+                 _chart.__clickHandler(d,i);
 //             }
 //             else {
-                _chart.onClick(d.data, i);
+//                _chart.onClick(d.data, i);
 //             }
         }
     }
