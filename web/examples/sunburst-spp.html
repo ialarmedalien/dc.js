@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>dc.js - Sunburst Chart Example</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="../css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="http://img-proportal.test/css/proportal.css">
+    <link rel="stylesheet" type="text/css" href="../css/dc.css"/>
+<link rel="stylesheet" type="text/css"  href='http://img-proportal.test/css/datatables.min.css' />
+
+    <style>
+        .pie-slice path, .partition-slice rect {
+            stroke:#fff;
+        }
+        .dc-chart .selected path {
+            stroke-width: 1;
+            stroke:#fff;
+        }
+        label {
+          display: inline-block;
+        }
+        .partition-slice text {
+          font-size: 8pt;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+<script type="text/javascript" src="header.js"></script>
+<div id="test"></div>
+<div id="ecosystem-filters__section" class="ecosystem-filters__section"></div>
+<table class="dataTable display ecosystem__table__table" id="ecosystem__table">
+</table>
+
+
+<script type="text/javascript" src="../js/d3.js"></script>
+<script type="text/javascript" src="../js/crossfilter.js"></script>
+<script type="text/javascript" src="../js/dc.js"></script>
+<script type="text/javascript" src="../js/datatables.min.js"></script>
+
+<script type="text/javascript">
+
+
+var chart_arr = [];
+['partitionRectangle', 'row', 'row', 'sunburst'].forEach( function(e,i){
+  d3.select('#test')
+    .append('div')
+    .attr('id', 'test' + i )
+    .classed('floatL', true)
+    .append('p')
+    .classed('filter', true);
+  chart_arr.push( dc[e+'Chart']('#test'+i) );
+});
+
+d3.json("spp.json").then(function(spp_data) {
+
+var label_h = {
+  pp_subset: {"pp_metagenome":"Marine metagenomes","syn":"Synechococcus","metagenome":"Marine metagenomes","other_phage":"Other phages","pro":"Prochlorococcus","bacteria":"Prochlorococcus, Synechococcus, and other bacteria","coccus":"Prochlorococcus and Synechococcus","syn_phage":"Synechococcus phage","pro_phage":"Prochlorococcus phage","other":"Other bacteria","pp_isolate":"All ProPortal isolates","all_proportal":"All isolates and metagenomes","phage":"Phages from Prochlorococcus, Synechococcus, and others","isolate":"All ProPortal isolates","proportal":"All isolates and metagenomes"},
+  'ecosystem': 'Ecosystem',
+  'ecosystem_category': 'Ecosystem category',
+  'ecosystem_type': 'Ecosystem type',
+  'ecosystem_subtype': 'Ecosystem subtype',
+  'specific_ecosystem': 'Specific ecosystem'
+}
+, class_type_h = {"0":"all","4":"ecosystem subtype","3":"ecosystem type","6":"taxon","2":"ecosystem category","5":"specific ecosystem","1":"ecosystem"
+}
+, text_fn = function(d,i,tip) {
+  if ( d.data && d.data.taxon_display_name) {
+    return d.data.taxon_display_name;
+  }
+  if( d.depth ) {
+    return class_type_h[ d.depth ] + ': ' + d.name + ', ' + ( d.value || d.values.length ) + ' samples';
+  }
+  return 'all ecosystem classifications';
+}
+
+// , vis = container.chart("TippedVisualisation", {
+//     chart_type: 'partition.rectangle'
+//     , tooltip: {
+//       selector: '.partition'
+//       , text: text_fn
+//     }
+//   })
+, data_table_opts = {
+
+  columns: [
+
+  { data: null, defaultContent: '' },
+
+  { data: 'taxon_oid', title: 'IMG taxon ID',
+  },
+
+  { data: 'taxon_display_name', title: 'Taxon name',
+    render: function( d, t, r ){
+      return '<a href="/details/taxon/' + r.taxon_oid + '">' + d + '</a>';
+    },
+  },
+//
+//   { data: 'ecosystem', title: 'Ecosystem',
+//   },
+//
+//   { data: 'ecosystem_category', title: 'Ecosystem category',
+//   },
+//
+//   { data: 'ecosystem_type', title: 'Ecosystem type',
+//   },
+//
+//   { data: 'ecosystem_subtype', title: 'Ecosystem subtype',
+//   },
+//
+//   { data: 'specific_ecosystem', title: 'Specific ecosystem',
+//     render: function( d ){ return getLabel('specific_ecosystem', d); },
+//   },
+//
+//   { data: 'pp_subset', title: 'ProPortal subset',
+//     render: function( d ){ return getLabel('pp_subset', d); },
+//   },
+//
+  ],
+
+  columnDefs: [{
+    orderable: false,
+    searchable: false,
+    className: 'select-checkbox',
+    targets: [ 0 ]
+  }],
+
+  rowId: 'taxon_oid',
+  buttons: [
+    'selectAll',
+    'selectNone',
+    { text: 'Add to Cart',
+      className: 'submit',
+      action: function ( e, dt, node, config ) {
+        // collect the IDs
+        var input = $('input[type=submit]')
+        , form = input.length > 0 ? $(input[0].form) : $()
+        , arr = dt.rows( { selected: true } ).data()
+          .map(function(d){ return d.taxon_oid; });
+        console.log( arr );
+        // cart link
+        // Iterate over all form elements
+//        $.each( arr, function(){
+//        // If element doesn't exist in DOM
+//          if(!$.contains(document, form[this.name])){
+//            // Create a hidden element
+//            $(form).append(
+//              $('<input>')
+//              .attr('type', 'hidden')
+//              .attr('name', this.name)
+//              .val(this.value)
+//            );
+//           }
+//        });
+      }
+    }
+  ],
+
+  dom: '<"dt_top"iBf>rt<"dt_bottom"lp>',
+  pageLength: 100,
+  lengthMenu: [ [50, 100, 200, -1], [50, 100, 200, "All"] ],
+  paging: true,
+
+  deferRender: true,
+  data: spp_data,
+  select: {
+    style: 'multi'
+  },
+//  scroller: true,
+//  scrollY: "20rem"
+}
+, slug_name = 'ecosystem'
+, table_id = slug_name + '__table'
+, ndx = crossfilter( spp_data )
+, xf_dim = new Object()
+, filter_h = new Object()
+, selecn = new Object()
+, table
+, env_dim_arr = [ 'ecosystem', 'ecosystem_category', 'ecosystem_type', 'ecosystem_subtype' ]
+, table_filter_dim = 'pp_subset'
+, e
+;
+
+env_dim_arr.forEach( function(e,i) {
+  xf_dim[ e ] = ndx.dimension(function(d){
+//    return d[ env_dim_arr[e] ];
+    return env_dim_arr.slice( 0 , i+1 )
+    .map( function(el) { return d[ el ] || 'unspecified'; } )
+    .join('__');
+  });
+  data_table_opts.columns.push(
+    { data: e,
+      title: label_h[e],
+      render: function( d ){ return getLabel( e, d ); }
+    }
+  );
+});
+
+data_table_opts.columns.push({
+  data: 'pp_subset',
+  title: 'ProPortal subset',
+  render: function( d ){ return getLabel( 'pp_subset', d ); }
+});
+
+[ 'pp_subset', 'ecotype', 'dataset_type', 'genome_type' ].forEach( function(e) {
+  xf_dim[ e ] = ndx.dimension( function(d){ return d[e] } );
+});
+
+add_dynamic_filters( slug_name, env_dim_arr );
+add_dynamic_filters( slug_name, [ 'genome_type' ] );
+
+xf_dim[ 'env_cat' ] = ndx.dimension( function(d) {
+  return env_dim_arr.map( function(el) { return d[el] } );
+});
+
+env_dim_arr.forEach( function(e) {
+  filter_h[e].title(function(d){
+//    var x = d.key.split('__').pop();
+    return ( d.key == '' ? 'unspecified' : d.key ) + ': ' + d.value;
+  });
+});
+
+// instantiate data table
+table = $('#' + table_id).DataTable(data_table_opts);
+
+dc.chartRegistry.list().forEach( function(e) {
+  e.on('filtered', refreshTable);
+});
+
+table
+.on( 'select', function ( e, dt, type, indexes ) {
+  if ( type === 'row' ) {
+    table.rows( indexes ).ids( true ).each(function(e){
+      selecn[e] = 1;
+    });
+  }
+})
+.on( 'deselect', function ( e, dt, type, indexes ) {
+  if ( type === 'row' ) {
+    table.rows( indexes ).ids( true ).each(function(e){
+      delete selecn[e];
+    });
+  }
+});
+
+    chart_arr[1]
+        .controlsUseVisibility(true)
+        .width(400)
+        .height(300)
+        .dimension( xf_dim.pp_subset )
+        .group( xf_dim.pp_subset.group().reduceCount() )
+        .title( function(d){
+            return getLabel( 'pp_subset', d.key ) + ': ' + d.value;
+        });
+
+    chart_arr[2]
+        .controlsUseVisibility(true)
+        .width(400)
+        .height(300)
+        .dimension( xf_dim.dataset_type )
+        .group( xf_dim.dataset_type.group().reduceCount() );
+
+    chart_arr[0]
+        .width(1000)
+        .height(600)
+        .dimension( xf_dim.env_cat )
+        .group( xf_dim.env_cat.group().reduceCount() )
+        .legend(dc.legend())
+        .controlsUseVisibility(true)
+        .title( function(d) {
+            return d.key.map(function(e){ return e || 'unspecified' }).join(" > ");
+        })
+        .label( function(d) {
+            return d.key.map(function(e){
+              return e || 'unspecified'
+            }).join(" > ");
+        })
+        .transitionDuration(1500)
+        .margins({ top: 10, bottom: 10, left: 200, right: 10 })
+        .collapsible(true)
+//        .horizontalOrientation(true)
+
+//        .externalLabels(50)
+//         .externalRadiusPadding(10)
+//         .drawPaths(true)
+        ;
+
+    chart_arr[3]
+        .width(1000)
+        .height(600)
+//        .innerRadius(50)
+        .collapsible(true)
+        .dimension( xf_dim.env_cat )
+        .group( xf_dim.env_cat.group().reduceCount() )
+        .legend(dc.legend())
+        .controlsUseVisibility(true)
+        .title( function(d) {
+            return d.key.map(function(e){
+          return e || 'unspecified'
+        }).join(" > "); })
+
+    refreshTable();
+    dc.renderAll();
+
+    function labeller(string) {
+      var labels = {
+        pp_subset: 'ProPortal subset',
+      };
+
+      if ( labels[string] ) {
+        return labels[string];
+      }
+      // split string by '_', uppercase the first character
+      string = string.replace('_',' ');
+      return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+
+    function refreshTable() {
+      dc.events.trigger(function () {
+        var table = $('#' + table_id ).DataTable()
+        , sel = table.rows({selected: true })
+          .ids( true )
+          .filter(function(d){
+            return d !== undefined;
+          })
+        , post_sel
+        ;
+        table
+        .clear()
+        .rows.add( xf_dim[ table_filter_dim ].top(Infinity) )
+        .draw();
+        post_sel = table.rows( sel ).select();
+        if ( selecn ) {
+          var s = Object.keys( selecn ).filter( function(e){
+            return selecn[e];
+          });
+          table.rows( s ).select();
+        }
+      });
+    }
+
+    function getLabel(dim,val){
+      if ( label_h[dim] && label_h[dim][val] ) {
+        return label_h[dim][val];
+      }
+      if ( typeof val === 'undefined' || null === val || val.length == 0 ) {
+        return 'unspecified';
+      }
+      return val;
+    }
+
+    function add_dynamic_filters( slug, fnames, chartGroup ) {
+      // remove the filters, add dynamically-generated filters
+      // note: what to do about absent data sets?
+      d3.selectAll('#' + slug + '-filters__section > *').remove();
+      d3.select('#' + slug + '-filters__section')
+    //    .classed('filters', false)
+    //    .classed('dynamic_filters', true)
+      ;
+
+      // add in the containers for the filters
+      fnames.forEach( function( x ) {
+        // add the container
+        d3.select('#' + slug + '-filters__section')
+    //    d3.select('#' + slug + '__section .dynamic_filters')
+          .append('form')
+          .classed( slug + '__filter--' + x, true )
+          .attr( 'id', slug + '__form--' + x )
+          .append('h4')
+          .classed( slug + '__title', true)
+          .text( labeller( x ) );
+        // the menu itself
+
+        filter_h[x] = dc.cboxMenu('#' + slug + '__form--' + x, chartGroup )
+          .title( function(d){
+            return getLabel( x, d.key ) + ': ' + d.value;
+          })
+          .dimension( xf_dim[x] )
+          .group( xf_dim[x].group() )
+          .multiple(true)
+          .controlsUseVisibility(true);
+      });
+    }
+});
+
+</script>
+
+</div>
+</body>
+</html>
