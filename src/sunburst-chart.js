@@ -11,7 +11,9 @@
  * @class sunburstChart
  * @memberof dc
  * @mixes dc.partitionMixin
+ * @mixes dc.collapsibleMixin
  * @mixes dc.hierarchyMixin
+ * @mixes dc.pieTypeMixin
  * @mixes dc.legendableMixin
  * @mixes dc.capMixin
  * @mixes dc.colorMixin
@@ -30,65 +32,40 @@
  * @returns {dc.sunburstChart}
  **/
 dc.sunburstChart = function (parent, chartGroup) {
-    var _chart =
-      dc.partitionMixin(
-        dc.hierarchyMixin(
-          dc.pieTypeMixin(
-            dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))))))
-      );
+
+    var _chart = {};
+//      =
+//       dc.partitionMixin(
+//         dc.hierarchyMixin(
+//           dc.pieTypeMixin(
+//             dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))))))
+//       );
+
+    ['base', 'color', 'cap', 'legendable', 'pieType', 'hierarchy', 'collapsible', 'partition'].forEach( function(m) {
+        _chart = dc[m + 'Mixin'](_chart);
+    });
+
+    _chart.colorAccessor(_chart.cappedKeyAccessor);
+
+    _chart.title(function (d) {
+        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
+    });
+
+    _chart.label(_chart.cappedKeyAccessor);
 
     _chart.tweenType = 'slice';
 
-//     function extendedValueAccessor (d) {
-//        if (d.data.key) {
-//             return d.value;
-//         }
-//         return _chart.cappedValueAccessor(d);
-//     }
-
-//     _chart.cappedValueAccessor = function (d, i) {
-//         if (d.others) {
-//             return d.value;
-//         }
-//         return _chart.valueAccessor()(d, i);
-//     };
-    // Handle cases if value corresponds to generated parent nodes
-    // ensure that titles return some value, rather than 'undefined'
-    dc.override( _chart, 'cappedValueAccessor', function (d) {
-        try {
-            var value = _chart._cappedValueAccessor(d);
-            if ( value ) {
-                return value;
-            }
-            throw "No value returned";
-        }
-        catch(e) {
-            if (d.data && d.data.key) {
-                return d.value;
-            }
-            else if ( d.computedValue ) {
-                return d.computedValue;
-            }
-            return 0;
-        }
-    });
-
-    dc.override( _chart, 'cappedKeyAccessor', function (d) {
-        var key = _chart._cappedKeyAccessor(d);
-        if ( key.length > 1 ) {
-            return key.slice(-1)[0];
-        }
-        return key[0];
-    });
-
-    _chart.layout = function () {
-        return d3.partition()
-            .size([2 * Math.PI, (_chart.radius() - _chart.externalRadiusPadding() ) * (_chart.radius() - _chart.externalRadiusPadding() ) ]);
-    }
-
-    _chart.isOffCanvas = function (d) {
-        return !d || isNaN(d.dx) || isNaN(d.dy);
-    }
+    _chart._d3 = {
+      scale: {
+        x: d3.scaleLinear()
+          .range([0, 2 * Math.PI]).clamp(true)
+        , y: d3.scaleLinear()
+      }
+    };
 
     return _chart.anchor(parent, chartGroup);
+
 };
+
+
+dc.partitionArc = dc.sunburstChart;

@@ -64,14 +64,16 @@ yearRingChart
     .dimension(yearDim)
     .group(spendPerYear)
     .innerRadius(50)
-    .controlsUseVisibility(true);
+   .controlsUseVisibility(true)
+    ;
 
   spendHistChart
     .dimension(spendDim)
     .group(spendHist)
     .x(d3.scaleLinear().domain([0,10]))
     .elasticY(true)
-    .controlsUseVisibility(true);
+   .controlsUseVisibility(true)
+    ;
 
 spendHistChart.xAxis().tickFormat(function(d) {return d*10}); // convert back to base unit
 spendHistChart.yAxis().ticks(2);
@@ -80,7 +82,8 @@ spenderRowChart
     .dimension(nameDim)
     .group(spendPerName)
     .elasticX(true)
-    .controlsUseVisibility(true);
+    .controlsUseVisibility(true)
+    ;
 
   function show_empty_message(chart) {
       var is_empty = d3.sum(chart.group().all().map(chart.valueAccessor())) === 0;

@@ -13,6 +13,31 @@
             stroke-width: 1;
             stroke:#fff;
         }
+
+.cluster-node text {
+  font: 10px sans-serif;
+}
+.cluster-node.internal text {
+  text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+}
+.cluster-link, .circClass {
+  fill: none;
+  stroke: #555;
+  stroke-opacity: 0.4;
+  stroke-width: 1px;
+}
+.circClass {
+  stroke-opacity:0
+}
+.cluster-link.selected {
+  stroke-width: 2px;
+  stroke-opacity: 1;
+}
+.cluster-link.toRoot {
+  stroke-width: 2px;
+  stroke-opacity: 1;
+  stroke: red
+}
     </style>
 </head>
 <body>
@@ -20,19 +45,33 @@
 <div class="container">
 <script type="text/javascript" src="header.js"></script>
 
+<div id="test"></div>
 <div id="file_chart"></div>
 <div id="type_chart"></div>
 
 <script type="text/javascript" src="../js/d3.js"></script>
 <script type="text/javascript" src="../js/crossfilter.js"></script>
 <script type="text/javascript" src="../js/dc.js"></script>
+<script type="text/javascript" src="../js/d3-shape.js"></script>
 <script type="text/javascript">
+
+var chart_arr = [];
+['radial', 'horiz', 'vert'].forEach( (a) => {
+  ['cluster', 'tree'].forEach( (b) => {
+    d3.select('#test')
+      .append('div')
+      .attr('id', a + '_' + b)
+      .append('h3')
+      .text( a + ' ' + b );
+    chart_arr.push( dc.clusterChart('#' + a + '_' + b ) );
+  });
+});
+
 
 var fileChart = dc.sunburstChart("#file_chart");
 var typeChart = dc.pieChart("#type_chart");
-
 d3.tsv("cat.tsv").then(function (cats) {
-    var ndx = crossfilter(cats);
+    var ndx = crossfilter(cats) //.filter( (d) => d.file.indexOf('zip') > 0 ));
     var picturesDimension = ndx.dimension(function (d) {
         return d.file.split('/');
     });
@@ -61,6 +100,7 @@ d3.tsv("cat.tsv").then(function (cats) {
         .dimension(picturesDimension)
         .group(picturesGroup)
         .colors(d3.scaleOrdinal(d3SchemeCategory20b))
+        .collapsible(true)
         .legend(dc.legend());
 
     typeChart
@@ -72,6 +112,53 @@ d3.tsv("cat.tsv").then(function (cats) {
         .drawPaths(true)
         .externalRadiusPadding(50)
         .externalLabels(25);
+
+  chart_arr.forEach( (a) => {
+    a.width(600)
+    .height(600)
+    .dimension(picturesDimension)
+    .nodeMarkerSize(6)
+    .group(picturesDimension.group().reduceSum(function (d) { return d.size; }))
+    .colors(d3.scaleOrdinal(d3SchemeCategory20b))
+    .transitionDuration(1500)
+    .margins({ top: 40, left: 40, right: 40, bottom: 40 })
+    .collapsible(true)
+  });
+  chart_arr[0]
+    .layoutType('cluster')
+    .radialLayout(true)
+    .diagonal('dogleg')
+
+  chart_arr[1]
+    .layoutType('tree')
+    .radialLayout(true)
+    .diagonal('l_shape')
+    .separation( function (a, b) {
+      return (a.parent == b.parent ? 1 : 2) / a.depth;
+    })
+
+  chart_arr[2]
+    .layoutType('cluster')
+    .horizontalOrientation(true)
+    .diagonal('l_shape_alt')
+//     .separation( function (a,b) {
+//       return 10 + d3.sum([a,b].map(function(d){
+//         return d.size == "D" ? 70 : 0;
+//     })
+
+  chart_arr[3]
+    .layoutType('tree')
+    .horizontalOrientation(true)
+    .diagonal('dogleg_alt')
+    .nodeSize([30, 50])
+
+  chart_arr[4]
+    .layoutType('cluster')
+    .diagonal('l_shape')
+
+  chart_arr[5]
+    .layoutType('tree')
+    .diagonal('dogleg')
 
     dc.renderAll();
 });

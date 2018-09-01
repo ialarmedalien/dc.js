@@ -35,10 +35,14 @@ chart.width(300)
         * [new pieChart(parent, [chartGroup])](#new_dc.pieChart_new)
         * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
         * [.slicesCap([cap])](#dc.pieChart+slicesCap) ⇒ <code>Number</code> \| [<code>pieChart</code>](#dc.pieChart)
+    * [.clusterChart](#dc.clusterChart)
+        * [new clusterChart(_chart, parent, [chartGroup])](#new_dc.clusterChart_new)
+        * [.createMissingAncestors([list], [accessor])](#dc.clusterChart+createMissingAncestors) ⇒ <code>Array</code>
+        * [.stratify([list])](#dc.clusterChart+stratify)
     * [.sunburstChart](#dc.sunburstChart)
         * [new sunburstChart(parent, [chartGroup])](#new_dc.sunburstChart_new)
-        * [.__clickHandler([d])](#dc.sunburstChart+__clickHandler)
-        * [.stratify([list], [key_acc])](#dc.sunburstChart+stratify)
+        * [.createMissingAncestors([list], [accessor])](#dc.sunburstChart+createMissingAncestors) ⇒ <code>Array</code>
+        * [.stratify([list])](#dc.sunburstChart+stratify)
     * [.barChart](#dc.barChart)
         * [new barChart(parent, [chartGroup])](#new_dc.barChart_new)
         * [.centerBar([centerBar])](#dc.barChart+centerBar) ⇒ <code>Boolean</code> \| [<code>barChart</code>](#dc.barChart)
@@ -331,9 +335,17 @@ chart.width(300)
         * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
         * [.externalLabels([externalLabelRadius])](#dc.pieTypeMixin+externalLabels) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
         * [.drawPaths([drawPaths])](#dc.pieTypeMixin+drawPaths) ⇒ <code>Boolean</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.minHeightForLabel([minHeightForLabel])](#dc.pieTypeMixin+minHeightForLabel) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+        * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
     * [.hierarchyMixin](#dc.hierarchyMixin) ⇒ [<code>hierarchyMixin</code>](#dc.hierarchyMixin)
-        * [.__clickHandler([d])](#dc.hierarchyMixin.__clickHandler)
-        * [.stratify([list], [key_acc])](#dc.hierarchyMixin.stratify)
+        * [.createMissingAncestors([list], [accessor])](#dc.hierarchyMixin.createMissingAncestors) ⇒ <code>Array</code>
+        * [.stratify([list])](#dc.hierarchyMixin.stratify)
+    * [.hierarchyFilterMixin](#dc.hierarchyFilterMixin) ⇒ [<code>hierarchyFilterMixin</code>](#dc.hierarchyFilterMixin)
+        * [.filtersForPath([path])](#dc.hierarchyFilterMixin.filtersForPath) ⇒ <code>Array</code>
+        * [.filterOnDatum([d])](#dc.hierarchyFilterMixin.filterOnDatum) ⇒ <code>dc.filters.hierarchyFilter</code>
+    * [.hierarchyClickHandlerMixin](#dc.hierarchyClickHandlerMixin) ⇒ [<code>hierarchyClickHandlerMixin</code>](#dc.hierarchyClickHandlerMixin)
+        * [.__clickHandler([d])](#dc.hierarchyClickHandlerMixin.__clickHandler)
     * [.partitionMixin](#dc.partitionMixin) ⇒ [<code>partitionMixin</code>](#dc.partitionMixin)
     * [.disableTransitions](#dc.disableTransitions) : <code>Boolean</code>
     * [.dateFormat](#dc.dateFormat) : <code>function</code>
@@ -574,16 +586,65 @@ value from high to low. Other slices exeeding the cap will be rolled up into one
 | --- | --- |
 | [cap] | <code>Number</code> | 
 
+<a name="dc.clusterChart"></a>
+
+### dc.clusterChart
+**Kind**: static class of [<code>dc</code>](#dc)  
+**Mixes**: [<code>hierarchyMixin</code>](#dc.hierarchyMixin), [<code>legendableMixin</code>](#dc.legendableMixin), [<code>marginMixin</code>](#dc.marginMixin), [<code>colorMixin</code>](#dc.colorMixin), [<code>baseMixin</code>](#dc.baseMixin)  
+
+* [.clusterChart](#dc.clusterChart)
+    * [new clusterChart(_chart, parent, [chartGroup])](#new_dc.clusterChart_new)
+    * [.createMissingAncestors([list], [accessor])](#dc.clusterChart+createMissingAncestors) ⇒ <code>Array</code>
+    * [.stratify([list])](#dc.clusterChart+stratify)
+
+<a name="new_dc.clusterChart_new"></a>
+
+#### new clusterChart(_chart, parent, [chartGroup])
+Cluster chart for hierarchical graphs
+
+
+| Param | Type | Description |
+| --- | --- | --- |
+| _chart | <code>Object</code> |  |
+| parent | <code>String</code> \| <code>node</code> \| <code>d3.selection</code> | Any valid [d3 single selector](https://github.com/d3/d3-3.x-api-reference/blob/master/Selections.md#selecting-elements) specifying a dom block element such as a div; or a dom element or d3 selection. |
+| [chartGroup] | <code>String</code> | The name of the chart group this chart instance should be placed in. Interaction with a chart will only trigger events and redraws within the chart's group. |
+
+<a name="dc.clusterChart+createMissingAncestors"></a>
+
+#### clusterChart.createMissingAncestors([list], [accessor]) ⇒ <code>Array</code>
+Fill in the missing (inferred) ancestors in a hierarchy
+
+**Kind**: instance method of [<code>clusterChart</code>](#dc.clusterChart)  
+**Mixes**: [<code>createMissingAncestors</code>](#dc.hierarchyMixin.createMissingAncestors)  
+**Returns**: <code>Array</code> - [all] array of data objects with all ancestors filled in  
+
+| Param | Type | Description |
+| --- | --- | --- |
+| [list] | <code>Array</code> | array of data objects |
+| [accessor] | <code>function</code> | unique accessor for list items |
+
+<a name="dc.clusterChart+stratify"></a>
+
+#### clusterChart.stratify([list])
+Convert a flat set of hierarchical data into a tree using d3.stratify
+
+**Kind**: instance method of [<code>clusterChart</code>](#dc.clusterChart)  
+**Mixes**: [<code>stratify</code>](#dc.hierarchyMixin.stratify)  
+
+| Param | Type |
+| --- | --- |
+| [list] | <code>Array</code> | 
+
 <a name="dc.sunburstChart"></a>
 
 ### dc.sunburstChart
 **Kind**: static class of [<code>dc</code>](#dc)  
-**Mixes**: [<code>partitionMixin</code>](#dc.partitionMixin), [<code>hierarchyMixin</code>](#dc.hierarchyMixin), [<code>legendableMixin</code>](#dc.legendableMixin), [<code>capMixin</code>](#dc.capMixin), [<code>colorMixin</code>](#dc.colorMixin), [<code>baseMixin</code>](#dc.baseMixin)  
+**Mixes**: [<code>partitionMixin</code>](#dc.partitionMixin), <code>dc.collapsibleMixin</code>, [<code>hierarchyMixin</code>](#dc.hierarchyMixin), [<code>pieTypeMixin</code>](#dc.pieTypeMixin), [<code>legendableMixin</code>](#dc.legendableMixin), [<code>capMixin</code>](#dc.capMixin), [<code>colorMixin</code>](#dc.colorMixin), [<code>baseMixin</code>](#dc.baseMixin)  
 
 * [.sunburstChart](#dc.sunburstChart)
     * [new sunburstChart(parent, [chartGroup])](#new_dc.sunburstChart_new)
-    * [.__clickHandler([d])](#dc.sunburstChart+__clickHandler)
-    * [.stratify([list], [key_acc])](#dc.sunburstChart+stratify)
+    * [.createMissingAncestors([list], [accessor])](#dc.sunburstChart+createMissingAncestors) ⇒ <code>Array</code>
+    * [.stratify([list])](#dc.sunburstChart+stratify)
 
 <a name="new_dc.sunburstChart_new"></a>
 
@@ -610,25 +671,23 @@ var chart1 = dc.sunburstChart('#chart-container1');
 // create a sunburst chart under #chart-container2 element using chart group A
 var chart2 = dc.sunburstChart('#chart-container2', 'chartGroupA');
 ```
-<a name="dc.sunburstChart+__clickHandler"></a>
+<a name="dc.sunburstChart+createMissingAncestors"></a>
 
-#### sunburstChart.__clickHandler([d])
-Hierarchy click handling
-
-The argument is the data from the item clicked upon; the click handler
-checks whether the item is currently filtered or not. Triggers a chart
-re-draw.
+#### sunburstChart.createMissingAncestors([list], [accessor]) ⇒ <code>Array</code>
+Fill in the missing (inferred) ancestors in a hierarchy
 
 **Kind**: instance method of [<code>sunburstChart</code>](#dc.sunburstChart)  
-**Mixes**: [<code>__clickHandler</code>](#dc.hierarchyMixin.__clickHandler)  
+**Mixes**: [<code>createMissingAncestors</code>](#dc.hierarchyMixin.createMissingAncestors)  
+**Returns**: <code>Array</code> - [all] array of data objects with all ancestors filled in  
 
-| Param | Type |
-| --- | --- |
-| [d] | <code>Object</code> | 
+| Param | Type | Description |
+| --- | --- | --- |
+| [list] | <code>Array</code> | array of data objects |
+| [accessor] | <code>function</code> | unique accessor for list items |
 
 <a name="dc.sunburstChart+stratify"></a>
 
-#### sunburstChart.stratify([list], [key_acc])
+#### sunburstChart.stratify([list])
 Convert a flat set of hierarchical data into a tree using d3.stratify
 
 **Kind**: instance method of [<code>sunburstChart</code>](#dc.sunburstChart)  
@@ -637,7 +696,6 @@ Convert a flat set of hierarchical data into a tree using d3.stratify
 | Param | Type |
 | --- | --- |
 | [list] | <code>Array</code> | 
-| [key_acc] | <code>function</code> | 
 
 <a name="dc.barChart"></a>
 
@@ -5529,6 +5587,9 @@ formatted and laid out using one of the d3 layout algorithms.
     * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
     * [.externalLabels([externalLabelRadius])](#dc.pieTypeMixin+externalLabels) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
     * [.drawPaths([drawPaths])](#dc.pieTypeMixin+drawPaths) ⇒ <code>Boolean</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.minHeightForLabel([minHeightForLabel])](#dc.pieTypeMixin+minHeightForLabel) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+    * [.emptyTitle([title])](#dc.pieTypeMixin+emptyTitle) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
 
 <a name="dc.pieTypeMixin+externalRadiusPadding"></a>
 
@@ -5635,6 +5696,40 @@ Get or set whether to draw lines from slices to their labels.
 | --- | --- |
 | [drawPaths] | <code>Boolean</code> | 
 
+<a name="dc.pieTypeMixin+emptyTitle"></a>
+
+#### pieTypeMixin.emptyTitle([title]) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Title to use for the only slice when there is no data.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [title] | <code>String</code> | 
+
+<a name="dc.pieTypeMixin+minHeightForLabel"></a>
+
+#### pieTypeMixin.minHeightForLabel([minHeightForLabel]) ⇒ <code>Number</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Get or set the minimum slice height for label rendering. Any slice with a smaller height will not
+display a label.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type | Default |
+| --- | --- | --- |
+| [minHeightForLabel] | <code>Number</code> | <code>12</code> | 
+
+<a name="dc.pieTypeMixin+emptyTitle"></a>
+
+#### pieTypeMixin.emptyTitle([title]) ⇒ <code>String</code> \| [<code>pieTypeMixin</code>](#dc.pieTypeMixin)
+Title to use for the only slice when there is no data.
+
+**Kind**: instance method of [<code>pieTypeMixin</code>](#dc.pieTypeMixin)  
+
+| Param | Type |
+| --- | --- |
+| [title] | <code>String</code> | 
+
 <a name="dc.hierarchyMixin"></a>
 
 ### dc.hierarchyMixin ⇒ [<code>hierarchyMixin</code>](#dc.hierarchyMixin)
@@ -5650,27 +5745,25 @@ When filtering, the hierarchical chart creates instances of [HierarchyFilter](#d
 
 
 * [.hierarchyMixin](#dc.hierarchyMixin) ⇒ [<code>hierarchyMixin</code>](#dc.hierarchyMixin)
-    * [.__clickHandler([d])](#dc.hierarchyMixin.__clickHandler)
-    * [.stratify([list], [key_acc])](#dc.hierarchyMixin.stratify)
+    * [.createMissingAncestors([list], [accessor])](#dc.hierarchyMixin.createMissingAncestors) ⇒ <code>Array</code>
+    * [.stratify([list])](#dc.hierarchyMixin.stratify)
 
-<a name="dc.hierarchyMixin.__clickHandler"></a>
+<a name="dc.hierarchyMixin.createMissingAncestors"></a>
 
-#### hierarchyMixin.__clickHandler([d])
-Hierarchy click handling
-
-The argument is the data from the item clicked upon; the click handler
-checks whether the item is currently filtered or not. Triggers a chart
-re-draw.
+#### hierarchyMixin.createMissingAncestors([list], [accessor]) ⇒ <code>Array</code>
+Fill in the missing (inferred) ancestors in a hierarchy
 
 **Kind**: static method of [<code>hierarchyMixin</code>](#dc.hierarchyMixin)  
+**Returns**: <code>Array</code> - [all] array of data objects with all ancestors filled in  
 
-| Param | Type |
-| --- | --- |
-| [d] | <code>Object</code> | 
+| Param | Type | Description |
+| --- | --- | --- |
+| [list] | <code>Array</code> | array of data objects |
+| [accessor] | <code>function</code> | unique accessor for list items |
 
 <a name="dc.hierarchyMixin.stratify"></a>
 
-#### hierarchyMixin.stratify([list], [key_acc])
+#### hierarchyMixin.stratify([list])
 Convert a flat set of hierarchical data into a tree using d3.stratify
 
 **Kind**: static method of [<code>hierarchyMixin</code>](#dc.hierarchyMixin)  
@@ -5678,7 +5771,80 @@ Convert a flat set of hierarchical data into a tree using d3.stratify
 | Param | Type |
 | --- | --- |
 | [list] | <code>Array</code> | 
-| [key_acc] | <code>function</code> | 
+
+<a name="dc.hierarchyFilterMixin"></a>
+
+### dc.hierarchyFilterMixin ⇒ [<code>hierarchyFilterMixin</code>](#dc.hierarchyFilterMixin)
+Filter mixin for hierarchical graphs
+
+When filtering, the hierarchical chart creates instances of [HierarchyFilter](#dc.filters.HierarchyFilter).
+
+**Kind**: static mixin of [<code>dc</code>](#dc)  
+
+| Param | Type |
+| --- | --- |
+| _chart | <code>Object</code> | 
+
+
+* [.hierarchyFilterMixin](#dc.hierarchyFilterMixin) ⇒ [<code>hierarchyFilterMixin</code>](#dc.hierarchyFilterMixin)
+    * [.filtersForPath([path])](#dc.hierarchyFilterMixin.filtersForPath) ⇒ <code>Array</code>
+    * [.filterOnDatum([d])](#dc.hierarchyFilterMixin.filterOnDatum) ⇒ <code>dc.filters.hierarchyFilter</code>
+
+<a name="dc.hierarchyFilterMixin.filtersForPath"></a>
+
+#### hierarchyFilterMixin.filtersForPath([path]) ⇒ <code>Array</code>
+Retrieve the filters involving a certain path -- the filters may be a
+parent or child of the path.
+
+**Kind**: static method of [<code>hierarchyFilterMixin</code>](#dc.hierarchyFilterMixin)  
+**Returns**: <code>Array</code> - [filters] array of filter items  
+
+| Param | Type |
+| --- | --- |
+| [path] | <code>Object</code> | 
+
+<a name="dc.hierarchyFilterMixin.filterOnDatum"></a>
+
+#### hierarchyFilterMixin.filterOnDatum([d]) ⇒ <code>dc.filters.hierarchyFilter</code>
+Filter a chart by a data item.
+
+The argument is the `data` object from the item clicked upon; the function
+checks whether the item is currently filtered or not. If the item is not
+currently filtered, a new dc.filters.hierarchyFilter is returned.
+
+**Kind**: static method of [<code>hierarchyFilterMixin</code>](#dc.hierarchyFilterMixin)  
+**Returns**: <code>dc.filters.hierarchyFilter</code> - [filter]  
+
+| Param | Type |
+| --- | --- |
+| [d] | <code>Object</code> | 
+
+<a name="dc.hierarchyClickHandlerMixin"></a>
+
+### dc.hierarchyClickHandlerMixin ⇒ [<code>hierarchyClickHandlerMixin</code>](#dc.hierarchyClickHandlerMixin)
+ClickHandler mixin for hierarchical graphs
+
+Generic click handler, suitable for overriding.
+
+**Kind**: static mixin of [<code>dc</code>](#dc)  
+
+| Param | Type |
+| --- | --- |
+| _chart | <code>Object</code> | 
+
+<a name="dc.hierarchyClickHandlerMixin.__clickHandler"></a>
+
+#### hierarchyClickHandlerMixin.__clickHandler([d])
+Hierarchy click handling
+
+Calls `filterOnDatum` from the hierarchyFilterMixin to add/remove the
+filter for an item. Triggers the chart group to be redrawn.
+
+**Kind**: static method of [<code>hierarchyClickHandlerMixin</code>](#dc.hierarchyClickHandlerMixin)  
+
+| Param | Type |
+| --- | --- |
+| [d] | <code>Object</code> | 
 
 <a name="dc.partitionMixin"></a>
 

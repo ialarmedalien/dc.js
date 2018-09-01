@@ -39,5 +39,13 @@ dc.marginMixin = function (_chart) {
         return _chart.height() - _chart.margins().top - _chart.margins().bottom;
     };
 
+    _chart.hasMargins = function () {
+        if ( _margin.top !== 0 || _margin.bottom !== 0
+            || _margin.left !== 0 || _margin.right !== 0 ) {
+            return true;
+        }
+        return false;
+    };
+
     return _chart;
 };

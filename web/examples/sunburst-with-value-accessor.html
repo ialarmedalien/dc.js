@@ -73,7 +73,9 @@
             .valueAccessor(function (d) {
                 return d.value._ordered.exceptionSum;
             })
-            .legend(dc.legend());
+            .legend(dc.legend())
+            .cap(10)
+            ;
 
         dc.renderAll();
     });

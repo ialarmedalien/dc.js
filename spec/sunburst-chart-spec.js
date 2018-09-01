@@ -1,4 +1,4 @@
-/* global appendChartID, loadDateFixture, makeDate */
+/* global appendChartID, loadDateFixture, loadFileData, makeDate */
 describe('dc.sunburstChart', function () {
     var width = 200;
     var height = 200;
@@ -6,18 +6,21 @@ describe('dc.sunburstChart', function () {
     var defaultCenter = {x: width / 2, y: height / 2};
     var newCenter = {x: 101, y: 99};
     var innerRadius = 30;
-    var data, valueDimension, valueGroup;
+    var data, valueDimension, arrValueDimension, valueGroup;
     var countryRegionStateDimension, countryRegionStateGroup;
-    var statusDimension;
-    var dateDimension;
-    var statusGroup, statusMultiGroup;
+    var statusDimension, regionDimension, countryDimension, dateDimension;
+    var statusGroup, statusMultiGroup, countryGroup;
 
     beforeEach(function () {
         data = crossfilter(loadDateFixture());
         valueDimension = data.dimension(function (d) {
             return d.value;
         });
+        arrValueDimension = data.dimension(function (d) {
+            return [ d.value ];
+        });
         valueGroup = valueDimension.group();
+
 
         countryRegionStateDimension = data.dimension(function (d) {
             return [d.countrycode, d.region, d.state];
@@ -32,6 +35,13 @@ describe('dc.sunburstChart', function () {
         dateDimension = data.dimension(function (d) {
             return d3.utcDay(d.dd);
         });
+        regionDimension = data.dimension(function (d) {
+            return d.region;
+        });
+        countryDimension = data.dimension(function (d) {
+            return d.countrycode;
+        });
+        countryGroup = countryDimension.group();
 
         statusGroup = statusDimension.group();
         statusMultiGroup = statusGroup.reduce(
@@ -59,7 +69,8 @@ describe('dc.sunburstChart', function () {
         div.append('a').attr('class', 'reset').style('display', 'none');
         div.append('span').attr('class', 'filter').style('display', 'none');
         var chart = dc.sunburstChart('#' + id);
-        chart.dimension(countryRegionStateDimension).group(countryRegionStateGroup)
+        chart
+            .dimension(countryRegionStateDimension).group(countryRegionStateGroup)
             .width(width)
             .height(height)
             .transitionDuration(0);
@@ -67,10 +78,26 @@ describe('dc.sunburstChart', function () {
         return chart;
     }
 
+
+    function buildValueChart (id) {
+        var div = appendChartID(id);
+        div.append('a').attr('class', 'reset').style('display', 'none');
+        div.append('span').attr('class', 'filter').style('display', 'none');
+        var valchart = dc.sunburstChart('#' + id);
+        valchart
+            .dimension(arrValueDimension).group(valueGroup)
+            .width(width)
+            .height(height)
+            .radius(radius)
+            .transitionDuration(0);
+        valchart.render();
+        return valchart;
+    }
+
     describe('generation', function () {
         var chart;
         beforeEach(function () {
-            chart = buildChart('pie-chart-age');
+            chart = buildChart('sunburst-age');
             chart.render();
         });
         it('we get something', function () {
@@ -80,7 +107,7 @@ describe('dc.sunburstChart', function () {
             expect(dc.hasChart(chart)).toBeTruthy();
         });
         it('dc-chart class should be turned on for parent div', function () {
-            expect(d3.select('#pie-chart-age').attr('class')).toEqual('dc-chart');
+            expect(d3.select('#sunburst-age').attr('class')).toEqual('dc-chart');
         });
         it('inner radius can be set', function () {
             chart.innerRadius(innerRadius);
@@ -206,7 +233,7 @@ describe('dc.sunburstChart', function () {
                 return chart;
             });
             it('multiple invocation of render should update chart', function () {
-                expect(d3.selectAll('#pie-chart-age svg').nodes().length).toEqual(1);
+                expect(d3.selectAll('#sunburst-age svg').nodes().length).toEqual(1);
             });
         });
 
@@ -328,4 +355,103 @@ describe('dc.sunburstChart', function () {
         });
     });
 
+    // added -- for external labels
+    describe('external labeling', function () {
+        var chart;
+        beforeEach(function () {
+            chart = buildChart('sunburst-external-labeling');
+            chart
+              .radius(radius)
+              .externalLabels(10)
+              .drawPaths(true);
+            chart.render();
+        });
+
+//         beforeEach(function () {
+//             chart = buildValueChart('sunburst-external-labeling');
+//             chart
+// //                 .externalLabels(10)
+// //                 .drawPaths(true)
+//                 .render();
+//         });
+        it('we get something', function () {
+            expect(chart).not.toBeNull();
+        });
+        it('should be registered', function () {
+            expect(dc.hasChart(chart)).toBeTruthy();
+        });
+        it('dc-chart class should be turned on for parent div', function () {
+            expect(d3.select('#sunburst-external-labeling').attr('class')).toEqual('dc-chart');
+        });
+        it('should place labels outside of pie offset by given radius', function () {
+            var label = d3.select('#sunburst-external-labeling svg g text.pie-slice');
+            var d = label.datum();
+            var centroid = d3.arc()
+                .outerRadius(chart.radius() + 10)
+                .innerRadius(chart.radius() + 10)
+                .centroid( { startAngle: d.x1, endAngle: d.x0 } );
+
+            expect(label.attr('transform')).toMatchTranslate(centroid[0], centroid[1], 3);
+        });
+        it('gives labels class "external"', function () {
+            d3.selectAll('#sunburst-external-labeling svg g text.pie-slice').each(function () {
+                expect(d3.select(this).classed('external')).toBeTruthy();
+            });
+        });
+        it('returns radius when given no arguments', function () {
+            expect(chart.externalLabels()).toEqual(10);
+        });
+        it('resets to default when given falsey argument', function () {
+            chart.externalLabels(false).render();
+
+            d3.selectAll('#sunburst-external-labeling svg g text.pie-slice').each(function () {
+                var label = d3.select(this);
+                var d = label.datum();
+                var centroid = d3.arc()
+                    .outerRadius(chart.radius())
+                    .innerRadius(chart.innerRadius())
+                    .centroid( { startAngle: d.x1, endAngle: d.x0 } );
+
+                expect(label.attr('transform')).toMatchTranslate(centroid[0], centroid[1], 3);
+                expect(label.classed('external')).toBeFalsy();
+            });
+        });
+        it('hovering on label should highlight corresponding slice', function () {
+            chart.selectAll('#sunburst-external-labeling text.pie-slice').each(function (d, i) {
+                var legendItem = d3.select(this);
+                legendItem.on('mouseover')(legendItem.datum(), i);
+
+                expect(chart.select('g.pie-slice._' + i).classed('highlight')).toBeTruthy();
+                legendItem.on('mouseout')(legendItem.datum());
+            });
+        });
+        it('unhovering label removes highlight from corresponding slice', function () {
+            chart.selectAll('#sunburst-external-labeling text.pie-slice').each(function (d, i) {
+                var legendItem = d3.select(this);
+                legendItem.on('mouseover')(legendItem.datum(), i);
+                legendItem.on('mouseout')(legendItem.datum(), i);
+
+                expect(chart.select('.pie-slice._' + i).classed('highlight')).toBeFalsy();
+            });
+        });
+
+        it('hovering on path should highlight corresponding slice', function () {
+            chart.selectAll('#sunburst-external-labeling polyline.pie-path').each(function (d, i) {
+                var legendItem = d3.select(this);
+                legendItem.on('mouseover')(legendItem.datum(), i);
+
+                expect(chart.select('g.pie-slice._' + i).classed('highlight')).toBeTruthy();
+                legendItem.on('mouseout')(legendItem.datum());
+            });
+        });
+        it('unhovering label removes highlight from corresponding slice', function () {
+            chart.selectAll('#sunburst-external-labeling polyline.pie-path').each(function (d, i) {
+                var legendItem = d3.select(this);
+                legendItem.on('mouseover')(legendItem.datum(), i);
+                legendItem.on('mouseout')(legendItem.datum(), i);
+
+                expect(chart.select('.pie-slice._' + i).classed('highlight')).toBeFalsy();
+            });
+        });
+    });
 });

@@ -21,6 +21,8 @@ dc.capMixin = function (_chart) {
         return -kv.value;
     });
 
+    var _ordering = function (kv) { return -kv.value; };
+
     var _othersGrouper = function (topItems, restItems) {
         var restItemsSum = d3.sum(restItems, _chart.valueAccessor()),
             restKeys = restItems.map(_chart.keyAccessor());
@@ -35,14 +37,14 @@ dc.capMixin = function (_chart) {
     };
 
     _chart.cappedKeyAccessor = function (d, i) {
-        if (d.others) {
+        if (d.hasOwnProperty('others')) {
             return d.key;
         }
         return _chart.keyAccessor()(d, i);
     };
 
     _chart.cappedValueAccessor = function (d, i) {
-        if (d.others) {
+        if (d.hasOwnProperty('others')) {
             return d.value;
         }
         return _chart.valueAccessor()(d, i);
@@ -55,7 +57,7 @@ dc.capMixin = function (_chart) {
             return _chart._computeOrderedGroups(group.all());
         } else {
             var items = group.all(), rest;
-            items = _chart._computeOrderedGroups(items); // sort by baseMixin.ordering
+            items = _chart._computeOrderedGroups(items, _ordering); // sort by baseMixin.ordering
 
             if (_cap) {
                 if (_takeFront) {

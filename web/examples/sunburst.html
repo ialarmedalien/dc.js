@@ -31,7 +31,7 @@
 
 var chart3 = dc.rowChart("#test3");
 var chart2 = dc.rowChart("#test2");
-var chart = dc.sunburstChart("#test");
+var chart  = dc.sunburstChart("#test");
 
 d3.csv("morley.csv").then(function(experiments) {
 
@@ -80,7 +80,6 @@ d3.csv("morley.csv").then(function(experiments) {
         .externalLabels(50)
         .externalRadiusPadding(10)
         .drawPaths(true)
-//        .cap(50)
         ;
 
     dc.renderAll();

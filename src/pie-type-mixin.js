@@ -1,3 +1,49 @@
+dc.highlighterMixin = function (_chart) {
+
+    var highlightableClasses = [];
+
+    // internal function to set which classes can be highlighted
+    // returns an array
+    // targeted chart must implement a `isSelectedElement` method
+    _chart._highlightableClasses = function (_) {
+        if (!arguments.length) {
+            return highlightableClasses;
+        }
+        highlightableClasses = _;
+        return _chart;
+    }
+
+    _chart._highlightElement = function (i, whether) {
+        highlightableClasses.forEach( function(c) {
+          _chart.select(c + '._' + i)
+              .classed('highlight', whether);
+        });
+    }
+
+    _chart._highlightFilter = function () {
+        if (_chart.hasFilter()) {
+            highlightableClasses.forEach( function(c) {
+                _chart.selectAll(c).each(function (d) {
+                    if (_chart.isSelectedElement(d)) {
+                        _chart.highlightSelected(this);
+                    } else {
+                        _chart.fadeDeselected(this);
+                    }
+                });
+            });
+        } else {
+            highlightableClasses.forEach( function(c) {
+              _chart.selectAll(c).each(function () {
+                  _chart.resetHighlight(this);
+              });
+            });
+        }
+    }
+
+    return _chart;
+}
+
+
 /**
  * functions and variables for pie-type charts, including the pie chart and the
  * sunburst chart.
@@ -16,6 +62,8 @@
  * @returns {dc.pieTypeMixin}
  */
 dc.pieTypeMixin = function (_chart) {
+
+
     var DEFAULT_MIN_ANGLE_FOR_LABEL = 0.5;
 
     var _sliceCssClass = 'pie-slice';
@@ -39,24 +87,7 @@ dc.pieTypeMixin = function (_chart) {
     var _externalLabelRadius;
     var _drawPaths = false;
 
-    var startAngleXFn = function (d) {
-        return d.x0;
-    },
-    endAngleXFn = function (d) {
-        return d.x1;
-    };
-    function getStartAngle (d) {
-        return d.startAngle;
-    }
-    function getEndAngle (d) {
-        return d.endAngle;
-    }
-
-    _chart.colorAccessor(_chart.cappedKeyAccessor);
-
-    _chart.title(function (d) {
-        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
-    });
+    var node;
 
     /**
      * Get or set the maximum number of slices the pie chart will generate. The top slices are determined by
@@ -72,7 +103,10 @@ dc.pieTypeMixin = function (_chart) {
     _chart.slicesCap = _chart.cap;
      */
 
-    _chart.label(_chart.cappedKeyAccessor);
+    _chart = dc.highlighterMixin(_chart)._highlightableClasses([ 'g.' + _sliceCssClass ]);
+
+    _chart.sliceCssClass = _sliceCssClass;
+
     _chart.renderLabel(true);
 
     _chart.transitionDuration(350);
@@ -86,14 +120,15 @@ dc.pieTypeMixin = function (_chart) {
             getEndAngle = endAngleXFn;
             tweenFn = tweenSlice;
             buildArcs = buildSliceArcs;
+            buildPolylineArcs = buildSlicePolylineArcs;
             labelText = labelTextSlice;
             labelPosition = labelPositionSlice;
-            onClick = onClickSlice;
-            _chart.onClick = onClickSlice;
+            _chart.onClick = onClick;
         }
         else {
             tweenFn = tweenPie;
             buildArcs = buildPieArcs;
+            buildPolylineArcs = buildPiePolylineArcs;
         }
 
         _g = _chart.svg()
@@ -114,20 +149,28 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-    function drawChart () {
+    _chart.setVariables = function () {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
+        // set the y scale on sunburst charts
+        if ( _chart.hasOwnProperty('_d3') && _chart._d3.hasOwnProperty('scale') ) {
+          _chart._d3.scale.y.range([ _chart.innerRadius(), _chart.radius() - _chart.externalRadiusPadding() ]);
+        }
+    }
+
+    function drawChart () {
+
+        _chart.setVariables();
 
         var arc = buildArcs();
 
         var chartData = _chart.data();
-        var emptyChart = true;
-        if (d3.sum( chartData, _chart.valueAccessor())) {
-            emptyChart = false;
-        }
+        var emptyChart = _chart.hasNoData( chartData )
         var dataWithLayout = _chart.prepareData( chartData, emptyChart );
-
+        if ( _chart.hasOwnProperty('nodes') ) {
+            node = dataWithLayout[0];
+        }
         if (_g) {
             _g.classed(_emptyCssClass, emptyChart);
 
@@ -139,69 +182,71 @@ dc.pieTypeMixin = function (_chart) {
                 .selectAll('text.' + _labelCssClass)
                 .data(dataWithLayout);
 
-            removeElements(slices, labels);
+            var polyline = _g.select('g.' + _polylineGroupCssClass)
+                .selectAll('polyline.' + _polylineCssClass)
+                .data(dataWithLayout);
 
-            createElements(slices, labels, arc, dataWithLayout);
+            var t = d3.transition()
+              .duration( _chart.transitionDuration() )
+              .delay( _chart.transitionDelay() );
 
-            updateElements(dataWithLayout, arc);
 
-            highlightFilter();
+            [ slices, labels, polyline ].forEach( function (sel) {
+                removeElements(sel);
+            });
 
-            dc.transition(_g, _chart.transitionDuration(), _chart.transitionDelay())
+            createElements(slices, labels, polyline, arc, t);
+
+            updateElements(slices, labels, polyline, arc, t);
+
+            _chart._highlightFilter();
+
+            chartTransition( _g )
                 .attr('transform', 'translate(' + _chart.cx() + ',' + _chart.cy() + ')');
         }
     }
 
-    function createElements (slices, labels, arc, data) {
-        var slicesEnter = createSliceNodes(slices);
-        createSlicePath(slicesEnter, arc);
-        createTitles(slicesEnter);
-        createLabels(labels, data, arc);
+    function chartTransition ( el ) {
+        return dc.transition(el, _chart.transitionDuration(), _chart.transitionDelay());
     }
 
     function nodeSliceClass (d, i) {
         return _sliceCssClass + ' _' + i + ( d.depth ? ' ' + _sliceCssClass + '-level-' + d.depth : '' );
     }
 
-    function createSliceNodes (slices) {
+    function titleSelection ( selection ) {
+        selection
+        .text(function (d) {
+            return _chart.title()(d.data);
+        });
+    }
+
+    function createElements (slices, labels, polyline, arc, t) {
         var slicesEnter = slices
             .enter()
             .append('g')
             .attr('class', nodeSliceClass);
-        return slicesEnter;
-    }
 
-    function createSlicePath (slicesEnter, arc) {
-        var slicePath = slicesEnter.append('path')
-            .attr('fill', fill)
-            .on('click', onClick)
-            .attr('d', function (d, i) {
-                return safeArc(d, i, arc);
-            });
+        var slicePaths = slicesEnter.append('path')
+            .on('click', _chart.hasOwnProperty('collapsible') && _chart.collapsible() ? collapseClick : onClick);
+        pathTween( slicePaths, arc, t );
 
-        var transition = dc.transition(slicePath, _chart.transitionDuration(), _chart.transitionDelay());
-        if (transition.attrTween) {
-            transition.attrTween('d', tweenFn);
-        }
-    }
-
-    function createTitles (slicesEnter) {
         if (_chart.renderTitle()) {
-            slicesEnter.append('title').text(function (d) {
-                return _chart.title()(d.data);
-            });
+            titleSelection( slicePaths.append('title') );
         }
+
+        createLabels(labels, polyline, arc, t);
     }
 
-    function labelText (d) {
-        if ((datumValueIsZero(d.data) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+    var labelText = function (d) {
+        if ((datumValueIsZero(d.data) || sliceTooSmall(d)) && !_chart.isSelectedElement(d)) {
             return '';
         }
         return _chart.label()(d.data);
-    }
+    },
 
-    function labelTextSlice (d) {
-        if (!_chart.isSelectedSlice(d)) {
+    labelTextSlice = function (d) {
+        if (!_chart.isSelectedElement(d)) {
             if ( datumValueIsZero(d) ) {
                 return '';
             }
@@ -213,10 +258,11 @@ dc.pieTypeMixin = function (_chart) {
             }
         }
         return _chart.label()(d);
-    }
+    };
 
-    function positionLabels (labels, arc) {
-        dc.transition(labels, _chart.transitionDuration(), _chart.transitionDelay())
+    function positionLabels (labels, arc, t) {
+        labels
+            .transition(t)
             .attr('transform', function (d) {
                 return labelPosition(d, arc);
             })
@@ -224,15 +270,10 @@ dc.pieTypeMixin = function (_chart) {
             .text(labelText);
     }
 
-    function highlightSlice (i, whether) {
-        _chart.select('g.' + _sliceCssClass + '._' + i)
-            .classed('highlight', whether);
-    }
-
-    function createLabels (labels, data, arc) {
+    function createLabels (labels, polyline, arc, t) {
         if (_chart.renderLabel()) {
             var labelsEnter = labels
-                .enter()
+              .enter()
                 .append('text')
                 .attr('class', function (d, i) {
                     var classes = _sliceCssClass + ' ' + _labelCssClass + ' _' + i;
@@ -243,129 +284,113 @@ dc.pieTypeMixin = function (_chart) {
                 })
                 .on('click', onClick)
                 .on('mouseover', function (d, i) {
-                    highlightSlice(i, true);
+                    _chart._highlightElement(i, true);
                 })
                 .on('mouseout', function (d, i) {
-                    highlightSlice(i, false);
+                    _chart._highlightElement(i, false);
                 });
-            positionLabels(labelsEnter, arc);
+            positionLabels(labelsEnter, arc, t);
             if (_externalLabelRadius && _drawPaths) {
-                updateLabelPaths(data, arc);
+                updateLabelPaths(polyline, arc, t);
             }
         }
     }
 
-    function updateLabelPaths (data, arc) {
-        var polyline = _g.select('g.' + _polylineGroupCssClass)
-            .selectAll('polyline.' + _polylineCssClass)
-            .data(data)
-
-        polyline.exit().remove();
+    function updateLabelPaths (polyline, arc, t) {
 
         polyline = polyline
-            .enter()
-            .append('polyline')
-            .attr('class', function (d, i) {
-                return _polylineCssClass + ' _' + i + ' ' + _sliceCssClass;
-            })
-            .on('click', onClick)
-            .on('mouseover', function (d, i) {
-                highlightSlice(i, true);
-            })
-            .on('mouseout', function (d, i) {
-                highlightSlice(i, false);
-            })
+                  .enter()
+                  .append('polyline')
+                  .attr('class', function (d, i) {
+                      return _polylineCssClass + ' _' + i + ' ' + _sliceCssClass;
+                  })
+                  .on('click', onClick)
+                  .on('mouseover', function (d, i) {
+                      _chart._highlightElement(i, true);
+                  })
+                  .on('mouseout', function (d, i) {
+                      _chart._highlightElement(i, false);
+                  })
             .merge(polyline);
 
-        var arc2 = d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
-                .innerRadius(_radius - _externalRadiusPadding);
-        if ( _chart.tweenType === 'slice' ) {
-            arc2.startAngle(function (d) {
-                    return d.x0;
-                })
-                .endAngle(function (d) {
-                    return d.x1;
-                })
-        }
-
-        var transition = dc.transition(polyline, _chart.transitionDuration(), _chart.transitionDelay());
+        var arc2 = buildPolylineArcs();
         // this is one rare case where d3.selection differs from d3.transition
-        if (transition.attrTween) {
-            transition
+//        if (transition.attrTween) {
+            polyline
+                .transition(t)
                 .attrTween('points', function (d) {
                     var current = {startAngle: getStartAngle(d), endAngle: getEndAngle(d)};
                     var interpolate = d3.interpolate(current, d);
                     this._current = interpolate(0);
-                    return function (t) {
-                        var d2 = interpolate(t);
+                    return function (tx) {
+                        var d2 = interpolate(tx);
                         return [arc.centroid(d2), arc2.centroid(d2)];
                     };
+                })
+                .style('visibility', function (d) {
+                    if ( d.height && d.height !== 0 ) {
+                      return 'hidden';
+                    }
+                    return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
                 });
-        } else {
-            transition.attr('points', function (d) {
-                return [arc.centroid(d), arc2.centroid(d)];
-            });
-        }
-        transition.style('visibility', function (d) {
-            if ( d.height && d.height !== 0 ) {
-              return 'hidden';
-            }
-            return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
-        });
+
+//         } else {
+//             transition.attr('points', function (d) {
+//                 return [arc.centroid(d), arc2.centroid(d)];
+//             });
+//         }
+//         transition.style('visibility', function (d) {
+//             if ( d.height && d.height !== 0 ) {
+//               return 'hidden';
+//             }
+//             return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
+//         });
     }
 
-    function updateElements (data, arc) {
-        updateSlicePaths(data, arc);
-        updateLabels(data, arc);
-        updateTitles(data);
-    }
+    function updateElements (slices, labels, polyline, arc, t) {
 
-    function updateSlicePaths (data, arc) {
-        var slicePaths = _g.selectAll('g.' + _sliceCssClass)
-            .data(data)
-            .select('path')
-            .attr('d', function (d, i) {
-                return safeArc(d, i, arc);
-            });
-        var transition = dc.transition(slicePaths, _chart.transitionDuration(), _chart.transitionDelay());
-        if (transition.attrTween) {
-            transition.attrTween('d', tweenFn);
-        }
-        transition.attr('fill', fill);
-    }
-
-    function updateLabels (data, arc) {
-        if (_chart.renderLabel()) {
-            var labels = _g.selectAll('text.' + _labelCssClass)
-                .data(data);
-            positionLabels(labels, arc);
-            if (_externalLabelRadius && _drawPaths) {
-                updateLabelPaths(data, arc);
-            }
-        }
-    }
-
-    function updateTitles (data) {
+        pathTween( slices.select('path'), arc, t );
         if (_chart.renderTitle()) {
-            _g.selectAll('g.' + _sliceCssClass)
-                .data(data)
-                .select('title')
-                .text(function (d) {
-                    return _chart.title()(d.data);
-                });
+            titleSelection( slices.select('title') );
+        }
+        updateLabels(labels, polyline, arc, t);
+    }
+
+    function pathTween ( selection, arc, t ) {
+        selection
+        .transition( t )
+        .attr('fill', fill)
+        .attrTween('d', tweenFn);
+//         function(d) {
+//           return function() {
+//             return safeArc(arc, d);
+//           };
+//         });
+    }
+
+    function updateLabels (labels, polyline, arc, t) {
+        if (_chart.renderLabel()) {
+            positionLabels(labels, arc, t);
+            if (_externalLabelRadius && _drawPaths) {
+                updateLabelPaths( polyline, arc, t);
+            }
         }
     }
 
-    function removeElements (slices, labels) {
-        slices.exit().remove();
-        labels.exit().remove();
+    function removeElements (selection) {
+        selection.exit().remove();
+    }
+
+/**
+    function highlightSlice (i, whether) {
+        _chart.select('g.' + _sliceCssClass + '._' + i)
+            .classed('highlight', whether);
     }
 
     function highlightFilter () {
         if (_chart.hasFilter()) {
             _chart.selectAll('g.' + _sliceCssClass).each(function (d) {
-                if (_chart.isSelectedSlice(d)) {
+                if (_chart.isSelectedElement(d)) {
                     _chart.highlightSelected(this);
                 } else {
                     _chart.fadeDeselected(this);
@@ -377,7 +402,7 @@ dc.pieTypeMixin = function (_chart) {
             });
         }
     }
-
+*/
     /**
      * Get or set the external radius padding of the chart. This will force the radius of the
      * chart to become smaller or larger depending on the value.
@@ -533,30 +558,6 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-    function buildArcs () {}
-
-    function buildSliceArcs () {
-        return d3.arc()
-            .startAngle(function (d) {
-                return d.x0;
-            })
-            .endAngle(function (d) {
-                return d.x1;
-            })
-            .innerRadius(function (d) {
-                return d.data.key && d.data.key.length === 1 ? _innerRadius : Math.sqrt(d.y0);
-            })
-            .outerRadius(function (d) {
-                return Math.sqrt(d.y1);
-            });
-    }
-
-    function buildPieArcs () {
-        return d3.arc()
-            .outerRadius(_radius - _externalRadiusPadding)
-            .innerRadius(_innerRadius);
-    }
-
     function sliceTooSmall (d) {
         var angle = ( getEndAngle(d) - getStartAngle(d) );
         return isNaN(angle) || angle < _minAngleForLabel;
@@ -566,87 +567,89 @@ dc.pieTypeMixin = function (_chart) {
         return _chart.cappedValueAccessor(d) === 0;
     }
 
-    function tweenFn (d) {}
-
-    function tweenPie (b) {
-        b.innerRadius = _innerRadius;
-        var current = this._current;
-        if (isOffCanvas(current)) {
-            current = {startAngle: 0, endAngle: 0};
-        } else {
-            // only interpolate startAngle & endAngle, not the whole data object
-            current = {startAngle: current.startAngle, endAngle: current.endAngle};
-        }
-        var i = d3.interpolate(current, b);
-        this._current = i(0);
-        return function (t) {
-            return safeArc(i(t), 0, buildArcs());
-        };
-    }
-
-    function tweenSlice (b) {
-        var current = this._current;
-        if (_chart.isOffCanvas(current)) {
-            current = {x: 0, y: 0, dx: 0, dy: 0};
-        }
-        // unfortunately, we can't tween an entire hierarchy since it has 2 way links.
-        var tweenTarget = {x: b.x, y: b.y, dx: b.dx, dy: b.dy};
-        var i = d3.interpolate(current, tweenTarget);
-        this._current = i(0);
-        return function (t) {
-            return safeArc(Object.assign({}, b, i(t)), 0, buildArcs());
-        };
-    }
-
-    function isOffCanvas (d) {
-        if ( _chart.hasOwnProperty('isOffCanvas') ) {
-            return _chart.isOffCanvas(d);
-        }
+    function isOffCanvasPie (d) {
         return !d || isNaN(getStartAngle(d)) || isNaN(getEndAngle(d));
     }
 
-    // from sunburst
-//     function isOffCanvasSlice (d) {
-//         return !d || isNaN(d.dx) || isNaN(d.dy);
-//     }
+    function isOffCanvasSlice (d) {
+        return !d || isNaN(d.x0) || isNaN(d.y0);
+    };
+
 
     function fill (d, i) {
         return _chart.getColor(d.data, i);
     }
 
-    function onClick (d, i) {
-        if (_g.attr('class') !== _emptyCssClass) {
-//             if (chart.hasOwnProperty('__clickHandler')) {
-                 _chart.__clickHandler(d,i);
-//             }
-//             else {
-//                _chart.onClick(d.data, i);
-//             }
-        }
-    }
-
-    function onClickSlice (d, i) {
-        if (_g.attr('class') !== _emptyCssClass) {
-            _chart.__clickHandler(d, i);
-        }
-    }
-
-
-    function safeArc (d, i, arc) {
-        var path = arc(d, i);
+    function safeArc (arc, d) {
+        var path = arc(d);
         if (path.indexOf('NaN') >= 0) {
             path = 'M0,0';
         }
         return path;
     }
 
-    function labelPosition (d, arc) {
+    var startAngleXFn = function (d) {
+        return d.x0;
+    },
+    endAngleXFn = function (d) {
+        return d.x1;
+    },
+    getStartAngle = function (d) {
+        return d.startAngle;
+    },
+    getEndAngle = function (d) {
+        return d.endAngle;
+    },
+
+    tweenFn = function (d) {},
+
+    tweenPie = function (d) {
+        d.innerRadius = _innerRadius;
+        var current = this._current;
+        if (isOffCanvasPie(current)) {
+            current = {startAngle: 0, endAngle: 0};
+        } else {
+            // only interpolate startAngle & endAngle, not the whole data object
+            current = {startAngle: current.startAngle, endAngle: current.endAngle};
+        }
+        var i = d3.interpolate(current, d);
+        this._current = i(0);
+        return function (t) {
+            return safeArc(buildArcs(), i(t));
+        };
+    },
+
+    tweenSlice = function (d) {
+        var current = this._current;
+        if (isOffCanvasSlice(current)) {
+            current = { x0: 0, x1: 0, y0: 0, y1: 0 };
+        }
+        var tweenTarget = {
+            x0: d.x0,
+            x1: d.x1,
+            y0: d.y0,
+            y1: d.y1
+        };
+        var i = d3.interpolate(current, tweenTarget);
+        this._current = i(0);
+        return function (t) {
+           return safeArc(buildArcs(), Object.assign({}, d, i(t)));
+        };
+    },
+
+    onClick = function (d, i) {
+        if (_g.attr('class') !== _emptyCssClass) {
+             _chart.__clickHandler(d,i);
+        }
+    },
+
+    labelPosition = function (d, arc) {
         var centroid;
         if (_externalLabelRadius) {
             centroid = d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
-                .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .centroid( d );
         } else {
             centroid = arc.centroid(d);
         }
@@ -655,14 +658,14 @@ dc.pieTypeMixin = function (_chart) {
         } else {
             return 'translate(' + centroid + ')';
         }
-    }
+    },
 
-    function labelPositionSlice (d, arc) {
+    labelPositionSlice = function (d, arc) {
         var centroid;
         if (_externalLabelRadius && d.height === 0) {
             centroid = d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
         } else {
             centroid = arc.centroid(d);
@@ -672,7 +675,81 @@ dc.pieTypeMixin = function (_chart) {
         } else {
             return 'translate(' + centroid + ')';
         }
+    },
+
+    buildArcs = function () {},
+
+    buildPieArcs = function () {
+        return d3.arc()
+            .innerRadius(_innerRadius)
+            .outerRadius(_radius - _externalRadiusPadding);
+    },
+
+    buildSliceArcs = function () {
+        return d3.arc()
+          .startAngle(function(d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x0)));
+          })
+          .endAngle(function(d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x1)));
+          })
+          .innerRadius(function(d) {
+//               if ( d.data.key && d.data.key.length === 1 ) {
+//                   return _innerRadius;
+//               }
+              return Math.max(0, _chart._d3.scale.y(d.y0));
+          })
+          .outerRadius(function(d) {
+              return Math.max(0, _chart._d3.scale.y(d.y1));
+          });
+    },
+
+    buildPolylineArcs = function () {},
+
+    buildPiePolylineArcs = function () {
+        return d3.arc()
+            .innerRadius(_radius - _externalRadiusPadding)
+            .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius);
+    },
+
+    buildSlicePolylineArcs = function () {
+        return d3.arc()
+            .startAngle(function (d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x0)));
+           })
+            .endAngle(function (d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x1)));
+            })
+            .innerRadius(_radius - _externalRadiusPadding)
+            .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius);
+    };
+
+
+    // sunburst only!
+    function collapseClick (d) {
+        node = _chart.collapse(node.id === d.id ? _chart.nodes[0] : d);
     }
+
+    _chart.collapse = function(d) {
+      var xd = d3.interpolate(_chart._d3.scale.x.domain(), [d.x0, d.x1]),
+          yd = d3.interpolate(_chart._d3.scale.y.domain(), [d.y0, 1]),
+          yr = d3.interpolate(_chart._d3.scale.y.range(), [d.y0 ? 20 : _chart.innerRadius(), _chart.radius() - _chart.externalRadiusPadding()]);
+
+        var transn = _chart.svg().transition()
+          .tween("scale", function() {
+            return function(t) {
+              _chart._d3.scale.x.domain(xd(t));
+              _chart._d3.scale.y.domain(yd(t)).range(yr(t)); };
+          });
+          transn.selectAll('path')
+          .attrTween('d', function(d) {
+            return function (t) {
+              return buildArcs()(d);
+            };
+          })
+
+          return d;
+    };
 
     return _chart;
 };

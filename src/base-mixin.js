@@ -350,18 +350,22 @@ dc.baseMixin = function (_chart) {
         return _chart;
     };
 
-    _chart._computeOrderedGroups = function (data) {
+    // use default ordering for sorting groups
+    // but allow a custom sorting to be passed in as an optional second argument
+    _chart._computeOrderedGroups = function (data, newOrder) {
         var dataCopy = data.slice(0);
-
+        var orderSort = _orderSort;
         if (dataCopy.length <= 1) {
             return dataCopy;
         }
-
-        if (!_orderSort) {
-            _orderSort = crossfilter.quicksort.by(_ordering);
+        if (arguments.length === 2) {
+            orderSort = crossfilter.quicksort.by(newOrder);
+        }
+        else if (arguments.length === 1 && !_orderSort) {
+            orderSort = crossfilter.quicksort.by(ordering);
         }
 
-        return _orderSort(dataCopy, 0, dataCopy.length);
+        return orderSort(dataCopy, 0, dataCopy.length);
     };
 
     /**
@@ -1269,6 +1273,7 @@ dc.baseMixin = function (_chart) {
         if (!arguments.length) {
             return _keyAccessor;
         }
+//        throw ('SET KEY ACCESSOR!');
         _keyAccessor = keyAccessor;
         return _chart;
     };

@@ -39,3 +39,11 @@ web/docs/public
 # html docs are only checked into gh-pages branch
 web/docs/html
 
+package-lock.json
+SpecRunner.html
+axis.js
+lib/
+tsv-formatter.js
+yarn.lock
+
+.eslintrc

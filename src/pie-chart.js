@@ -27,6 +27,13 @@ dc.pieChart = function (parent, chartGroup) {
 
     var _chart = dc.pieTypeMixin(dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({})))));
 
+    _chart.colorAccessor(_chart.cappedKeyAccessor);
+
+    _chart.title(function (d) {
+        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
+    });
+    _chart.label(_chart.cappedKeyAccessor);
+
     _chart.tweenType = 'pie';
 
     /**
@@ -50,6 +57,16 @@ dc.pieChart = function (parent, chartGroup) {
         return [{ key: _chart.emptyTitle(), value: 1, others: [_chart.emptyTitle()] }];
     }
 
+    // does the chart have any data to represent?
+    _chart.hasNoData = function ( chartData ) {
+        for (var i = 0; i < chartData.length; i++) {
+            if ( _chart.cappedValueAccessor( chartData[i] ) !== 0 ) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     _chart.prepareData = function ( chartData, emptyChart ) {
         // if we have data...
         if ( ! emptyChart ) {
@@ -57,13 +74,13 @@ dc.pieChart = function (parent, chartGroup) {
         } else {
             return layout()( emptyData() );
         }
-    }
+    };
 
     _chart.__clickHandler = function (d, i) {
         _chart.onClick(d.data, i);
     };
 
-    _chart.isSelectedSlice = function (d) {
+    _chart.isSelectedElement = function (d) {
         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
     };
 

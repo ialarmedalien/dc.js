@@ -234,5 +234,21 @@ function loadIrisFixture () {
     );
 }
 
+function loadFileData () {
+    return d3.tsvParse(
+"file	size	type\n" +
+"pics/cats/pixel/jumping.jpg	25000	jpg\n" +
+"pics/all/wedding/aftermath/wife.jpg	12000	jpg\n" +
+"pics/others/child.mov	14000	mov\n" +
+"pics/wellington.jpg	18000	jpg\n" +
+"pics/park.jpg	1200	jpg\n" +
+"music/hiphop/chap/mr b/likeachap.mp3	25000	mp3\n" +
+"new/movie.mov	14000	mov\n" +
+"code/project/current/dc3.zip	12000	zip\n" +
+"mail.zip	20000	zip\n"
+    );
+
+}
+
 /* jscs:enable validateQuoteMarks, maximumLineLength */
 /* jshint +W109, +W101, +W098 */

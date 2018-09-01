@@ -539,7 +539,9 @@ dc.printers.filter = function (filter) {
     if (typeof filter !== 'undefined' && filter !== null) {
         if (filter instanceof Array) {
             if (filter.length >= 2) {
-                s = '[' + dc.utils.printSingleValue(filter[0]) + ' -> ' + dc.utils.printSingleValue(filter[1]) + ']';
+                s = '[' + filter.map(function(e){
+                  return dc.utils.printSingleValue(e);
+                }).join( ' -> ' ) + ']';
             } else if (filter.length >= 1) {
                 s = dc.utils.printSingleValue(filter[0]);
             }
@@ -1297,7 +1299,6 @@ dc.filters.HierarchyFilter = function (path) {
                 return false;
             }
         }
-        console.log("Filter ON for value " + value.join(","))
         return true;
     };
     return filter;
@@ -1655,18 +1656,22 @@ dc.baseMixin = function (_chart) {
         return _chart;
     };
 
-    _chart._computeOrderedGroups = function (data) {
+    // use default ordering for sorting groups
+    // but allow a custom sorting to be passed in as an optional second argument
+    _chart._computeOrderedGroups = function (data, newOrder) {
         var dataCopy = data.slice(0);
-
+        var orderSort = _orderSort;
         if (dataCopy.length <= 1) {
             return dataCopy;
         }
-
-        if (!_orderSort) {
-            _orderSort = crossfilter.quicksort.by(_ordering);
+        if (arguments.length === 2) {
+            orderSort = crossfilter.quicksort.by(newOrder);
+        }
+        else if (arguments.length === 1 && !_orderSort) {
+            orderSort = crossfilter.quicksort.by(ordering);
         }
 
-        return _orderSort(dataCopy, 0, dataCopy.length);
+        return orderSort(dataCopy, 0, dataCopy.length);
     };
 
     /**
@@ -2574,6 +2579,7 @@ dc.baseMixin = function (_chart) {
         if (!arguments.length) {
             return _keyAccessor;
         }
+//        throw ('SET KEY ACCESSOR!');
         _keyAccessor = keyAccessor;
         return _chart;
     };
@@ -2910,6 +2916,14 @@ dc.marginMixin = function (_chart) {
 
     _chart.effectiveHeight = function () {
         return _chart.height() - _chart.margins().top - _chart.margins().bottom;
+    };
+
+    _chart.hasMargins = function () {
+        if ( _margin.top !== 0 || _margin.bottom !== 0
+            || _margin.left !== 0 || _margin.right !== 0 ) {
+            return true;
+        }
+        return false;
     };
 
     return _chart;
@@ -4949,6 +4963,8 @@ dc.capMixin = function (_chart) {
         return -kv.value;
     });
 
+    var _ordering = function (kv) { return -kv.value; };
+
     var _othersGrouper = function (topItems, restItems) {
         var restItemsSum = d3.sum(restItems, _chart.valueAccessor()),
             restKeys = restItems.map(_chart.keyAccessor());
@@ -4963,14 +4979,14 @@ dc.capMixin = function (_chart) {
     };
 
     _chart.cappedKeyAccessor = function (d, i) {
-        if (d.others) {
+        if (d.hasOwnProperty('others')) {
             return d.key;
         }
         return _chart.keyAccessor()(d, i);
     };
 
     _chart.cappedValueAccessor = function (d, i) {
-        if (d.others) {
+        if (d.hasOwnProperty('others')) {
             return d.value;
         }
         return _chart.valueAccessor()(d, i);
@@ -4983,7 +4999,7 @@ dc.capMixin = function (_chart) {
             return _chart._computeOrderedGroups(group.all());
         } else {
             var items = group.all(), rest;
-            items = _chart._computeOrderedGroups(items); // sort by baseMixin.ordering
+            items = _chart._computeOrderedGroups(items, _ordering); // sort by baseMixin.ordering
 
             if (_cap) {
                 if (_takeFront) {
@@ -5439,6 +5455,13 @@ dc.pieChart = function (parent, chartGroup) {
 
     var _chart = dc.pieTypeMixin(dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({})))));
 
+    _chart.colorAccessor(_chart.cappedKeyAccessor);
+
+    _chart.title(function (d) {
+        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
+    });
+    _chart.label(_chart.cappedKeyAccessor);
+
     _chart.tweenType = 'pie';
 
     /**
@@ -5462,6 +5485,16 @@ dc.pieChart = function (parent, chartGroup) {
         return [{ key: _chart.emptyTitle(), value: 1, others: [_chart.emptyTitle()] }];
     }
 
+    // does the chart have any data to represent?
+    _chart.hasNoData = function ( chartData ) {
+        for (var i = 0; i < chartData.length; i++) {
+            if ( _chart.cappedValueAccessor( chartData[i] ) !== 0 ) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     _chart.prepareData = function ( chartData, emptyChart ) {
         // if we have data...
         if ( ! emptyChart ) {
@@ -5469,13 +5502,13 @@ dc.pieChart = function (parent, chartGroup) {
         } else {
             return layout()( emptyData() );
         }
-    }
+    };
 
     _chart.__clickHandler = function (d, i) {
         _chart.onClick(d.data, i);
     };
 
-    _chart.isSelectedSlice = function (d) {
+    _chart.isSelectedElement = function (d) {
         return _chart.hasFilter(_chart.cappedKeyAccessor(d.data));
     };
 
@@ -5496,8 +5529,12 @@ dc.pieChart = function (parent, chartGroup) {
 
 dc.legendableMixin = function (_chart) {
 
+    _chart.legendablesData = function (d) {
+        return _chart.data();
+    };
+
     _chart.legendables = function () {
-        return _chart.data()
+        return _chart.legendablesData()
           .map(function (d, i) {
             var legendable = { name: d.key, data: d.value, others: d.others, chart: _chart };
             legendable.color = _chart.getColor(d, i);
@@ -5521,8 +5558,8 @@ dc.legendableMixin = function (_chart) {
     };
 
     function highlightSliceFromLegendable (legendable, highlighted) {
-//        _chart.selectAll('g.' + _chart.sliceCssClass).each(function (d) {
-        _chart.selectAll('g.pie-slice').each(function (d) {
+        _chart.selectAll('g.' + _chart.sliceCssClass).each(function (d) {
+//        _chart.selectAll('g.pie-slice').each(function (d) {
             if (legendable.name === d.data.key) {
                 d3.select(this).classed('highlight', highlighted);
             }
@@ -5531,6 +5568,52 @@ dc.legendableMixin = function (_chart) {
 
     return _chart;
 };
+
+dc.highlighterMixin = function (_chart) {
+
+    var highlightableClasses = [];
+
+    // internal function to set which classes can be highlighted
+    // returns an array
+    // targeted chart must implement a `isSelectedElement` method
+    _chart._highlightableClasses = function (_) {
+        if (!arguments.length) {
+            return highlightableClasses;
+        }
+        highlightableClasses = _;
+        return _chart;
+    }
+
+    _chart._highlightElement = function (i, whether) {
+        highlightableClasses.forEach( function(c) {
+          _chart.select(c + '._' + i)
+              .classed('highlight', whether);
+        });
+    }
+
+    _chart._highlightFilter = function () {
+        if (_chart.hasFilter()) {
+            highlightableClasses.forEach( function(c) {
+                _chart.selectAll(c).each(function (d) {
+                    if (_chart.isSelectedElement(d)) {
+                        _chart.highlightSelected(this);
+                    } else {
+                        _chart.fadeDeselected(this);
+                    }
+                });
+            });
+        } else {
+            highlightableClasses.forEach( function(c) {
+              _chart.selectAll(c).each(function () {
+                  _chart.resetHighlight(this);
+              });
+            });
+        }
+    }
+
+    return _chart;
+}
+
 
 /**
  * functions and variables for pie-type charts, including the pie chart and the
@@ -5550,6 +5633,8 @@ dc.legendableMixin = function (_chart) {
  * @returns {dc.pieTypeMixin}
  */
 dc.pieTypeMixin = function (_chart) {
+
+
     var DEFAULT_MIN_ANGLE_FOR_LABEL = 0.5;
 
     var _sliceCssClass = 'pie-slice';
@@ -5573,24 +5658,7 @@ dc.pieTypeMixin = function (_chart) {
     var _externalLabelRadius;
     var _drawPaths = false;
 
-    var startAngleXFn = function (d) {
-        return d.x0;
-    },
-    endAngleXFn = function (d) {
-        return d.x1;
-    };
-    function getStartAngle (d) {
-        return d.startAngle;
-    }
-    function getEndAngle (d) {
-        return d.endAngle;
-    }
-
-    _chart.colorAccessor(_chart.cappedKeyAccessor);
-
-    _chart.title(function (d) {
-        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
-    });
+    var node;
 
     /**
      * Get or set the maximum number of slices the pie chart will generate. The top slices are determined by
@@ -5606,7 +5674,10 @@ dc.pieTypeMixin = function (_chart) {
     _chart.slicesCap = _chart.cap;
      */
 
-    _chart.label(_chart.cappedKeyAccessor);
+    _chart = dc.highlighterMixin(_chart)._highlightableClasses([ 'g.' + _sliceCssClass ]);
+
+    _chart.sliceCssClass = _sliceCssClass;
+
     _chart.renderLabel(true);
 
     _chart.transitionDuration(350);
@@ -5620,14 +5691,15 @@ dc.pieTypeMixin = function (_chart) {
             getEndAngle = endAngleXFn;
             tweenFn = tweenSlice;
             buildArcs = buildSliceArcs;
+            buildPolylineArcs = buildSlicePolylineArcs;
             labelText = labelTextSlice;
             labelPosition = labelPositionSlice;
-            onClick = onClickSlice;
-            _chart.onClick = onClickSlice;
+            _chart.onClick = onClick;
         }
         else {
             tweenFn = tweenPie;
             buildArcs = buildPieArcs;
+            buildPolylineArcs = buildPiePolylineArcs;
         }
 
         _g = _chart.svg()
@@ -5648,20 +5720,28 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-    function drawChart () {
+    _chart.setVariables = function () {
         // set radius from chart size if none given, or if given radius is too large
         var maxRadius =  d3.min([_chart.width(), _chart.height()]) / 2;
         _radius = _givenRadius && _givenRadius < maxRadius ? _givenRadius : maxRadius;
+        // set the y scale on sunburst charts
+        if ( _chart.hasOwnProperty('_d3') && _chart._d3.hasOwnProperty('scale') ) {
+          _chart._d3.scale.y.range([ _chart.innerRadius(), _chart.radius() - _chart.externalRadiusPadding() ]);
+        }
+    }
+
+    function drawChart () {
+
+        _chart.setVariables();
 
         var arc = buildArcs();
 
         var chartData = _chart.data();
-        var emptyChart = true;
-        if (d3.sum( chartData, _chart.valueAccessor())) {
-            emptyChart = false;
-        }
+        var emptyChart = _chart.hasNoData( chartData )
         var dataWithLayout = _chart.prepareData( chartData, emptyChart );
-
+        if ( _chart.hasOwnProperty('nodes') ) {
+            node = dataWithLayout[0];
+        }
         if (_g) {
             _g.classed(_emptyCssClass, emptyChart);
 
@@ -5673,69 +5753,71 @@ dc.pieTypeMixin = function (_chart) {
                 .selectAll('text.' + _labelCssClass)
                 .data(dataWithLayout);
 
-            removeElements(slices, labels);
+            var polyline = _g.select('g.' + _polylineGroupCssClass)
+                .selectAll('polyline.' + _polylineCssClass)
+                .data(dataWithLayout);
 
-            createElements(slices, labels, arc, dataWithLayout);
+            var t = d3.transition()
+              .duration( _chart.transitionDuration() )
+              .delay( _chart.transitionDelay() );
 
-            updateElements(dataWithLayout, arc);
 
-            highlightFilter();
+            [ slices, labels, polyline ].forEach( function (sel) {
+                removeElements(sel);
+            });
 
-            dc.transition(_g, _chart.transitionDuration(), _chart.transitionDelay())
+            createElements(slices, labels, polyline, arc, t);
+
+            updateElements(slices, labels, polyline, arc, t);
+
+            _chart._highlightFilter();
+
+            chartTransition( _g )
                 .attr('transform', 'translate(' + _chart.cx() + ',' + _chart.cy() + ')');
         }
     }
 
-    function createElements (slices, labels, arc, data) {
-        var slicesEnter = createSliceNodes(slices);
-        createSlicePath(slicesEnter, arc);
-        createTitles(slicesEnter);
-        createLabels(labels, data, arc);
+    function chartTransition ( el ) {
+        return dc.transition(el, _chart.transitionDuration(), _chart.transitionDelay());
     }
 
     function nodeSliceClass (d, i) {
         return _sliceCssClass + ' _' + i + ( d.depth ? ' ' + _sliceCssClass + '-level-' + d.depth : '' );
     }
 
-    function createSliceNodes (slices) {
+    function titleSelection ( selection ) {
+        selection
+        .text(function (d) {
+            return _chart.title()(d.data);
+        });
+    }
+
+    function createElements (slices, labels, polyline, arc, t) {
         var slicesEnter = slices
             .enter()
             .append('g')
             .attr('class', nodeSliceClass);
-        return slicesEnter;
-    }
 
-    function createSlicePath (slicesEnter, arc) {
-        var slicePath = slicesEnter.append('path')
-            .attr('fill', fill)
-            .on('click', onClick)
-            .attr('d', function (d, i) {
-                return safeArc(d, i, arc);
-            });
+        var slicePaths = slicesEnter.append('path')
+            .on('click', _chart.hasOwnProperty('collapsible') && _chart.collapsible() ? collapseClick : onClick);
+        pathTween( slicePaths, arc, t );
 
-        var transition = dc.transition(slicePath, _chart.transitionDuration(), _chart.transitionDelay());
-        if (transition.attrTween) {
-            transition.attrTween('d', tweenFn);
-        }
-    }
-
-    function createTitles (slicesEnter) {
         if (_chart.renderTitle()) {
-            slicesEnter.append('title').text(function (d) {
-                return _chart.title()(d.data);
-            });
+            titleSelection( slicePaths.append('title') );
         }
+
+        createLabels(labels, polyline, arc, t);
     }
 
-    function labelText (d) {
-        if ((datumValueIsZero(d.data) || sliceTooSmall(d)) && !_chart.isSelectedSlice(d)) {
+    var labelText = function (d) {
+        if ((datumValueIsZero(d.data) || sliceTooSmall(d)) && !_chart.isSelectedElement(d)) {
             return '';
         }
         return _chart.label()(d.data);
-    }
+    },
 
-    function labelTextSlice (d) {
-        if (!_chart.isSelectedSlice(d)) {
+    labelTextSlice = function (d) {
+        if (!_chart.isSelectedElement(d)) {
             if ( datumValueIsZero(d) ) {
                 return '';
             }
@@ -5747,10 +5829,11 @@ dc.pieTypeMixin = function (_chart) {
             }
         }
         return _chart.label()(d);
-    }
+    };
 
-    function positionLabels (labels, arc) {
-        dc.transition(labels, _chart.transitionDuration(), _chart.transitionDelay())
+    function positionLabels (labels, arc, t) {
+        labels
+            .transition(t)
             .attr('transform', function (d) {
                 return labelPosition(d, arc);
             })
@@ -5758,15 +5841,10 @@ dc.pieTypeMixin = function (_chart) {
             .text(labelText);
     }
 
-    function highlightSlice (i, whether) {
-        _chart.select('g.' + _sliceCssClass + '._' + i)
-            .classed('highlight', whether);
-    }
-
-    function createLabels (labels, data, arc) {
+    function createLabels (labels, polyline, arc, t) {
         if (_chart.renderLabel()) {
             var labelsEnter = labels
-                .enter()
+              .enter()
                 .append('text')
                 .attr('class', function (d, i) {
                     var classes = _sliceCssClass + ' ' + _labelCssClass + ' _' + i;
@@ -5777,129 +5855,113 @@ dc.pieTypeMixin = function (_chart) {
                 })
                 .on('click', onClick)
                 .on('mouseover', function (d, i) {
-                    highlightSlice(i, true);
+                    _chart._highlightElement(i, true);
                 })
                 .on('mouseout', function (d, i) {
-                    highlightSlice(i, false);
+                    _chart._highlightElement(i, false);
                 });
-            positionLabels(labelsEnter, arc);
+            positionLabels(labelsEnter, arc, t);
             if (_externalLabelRadius && _drawPaths) {
-                updateLabelPaths(data, arc);
+                updateLabelPaths(polyline, arc, t);
             }
         }
     }
 
-    function updateLabelPaths (data, arc) {
-        var polyline = _g.select('g.' + _polylineGroupCssClass)
-            .selectAll('polyline.' + _polylineCssClass)
-            .data(data)
-
-        polyline.exit().remove();
+    function updateLabelPaths (polyline, arc, t) {
 
         polyline = polyline
-            .enter()
-            .append('polyline')
-            .attr('class', function (d, i) {
-                return _polylineCssClass + ' _' + i + ' ' + _sliceCssClass;
-            })
-            .on('click', onClick)
-            .on('mouseover', function (d, i) {
-                highlightSlice(i, true);
-            })
-            .on('mouseout', function (d, i) {
-                highlightSlice(i, false);
-            })
+                  .enter()
+                  .append('polyline')
+                  .attr('class', function (d, i) {
+                      return _polylineCssClass + ' _' + i + ' ' + _sliceCssClass;
+                  })
+                  .on('click', onClick)
+                  .on('mouseover', function (d, i) {
+                      _chart._highlightElement(i, true);
+                  })
+                  .on('mouseout', function (d, i) {
+                      _chart._highlightElement(i, false);
+                  })
             .merge(polyline);
 
-        var arc2 = d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
-                .innerRadius(_radius - _externalRadiusPadding);
-        if ( _chart.tweenType === 'slice' ) {
-            arc2.startAngle(function (d) {
-                    return d.x0;
-                })
-                .endAngle(function (d) {
-                    return d.x1;
-                })
-        }
-
-        var transition = dc.transition(polyline, _chart.transitionDuration(), _chart.transitionDelay());
+        var arc2 = buildPolylineArcs();
         // this is one rare case where d3.selection differs from d3.transition
-        if (transition.attrTween) {
-            transition
+//        if (transition.attrTween) {
+            polyline
+                .transition(t)
                 .attrTween('points', function (d) {
                     var current = {startAngle: getStartAngle(d), endAngle: getEndAngle(d)};
                     var interpolate = d3.interpolate(current, d);
                     this._current = interpolate(0);
-                    return function (t) {
-                        var d2 = interpolate(t);
+                    return function (tx) {
+                        var d2 = interpolate(tx);
                         return [arc.centroid(d2), arc2.centroid(d2)];
                     };
+                })
+                .style('visibility', function (d) {
+                    if ( d.height && d.height !== 0 ) {
+                      return 'hidden';
+                    }
+                    return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
                 });
-        } else {
-            transition.attr('points', function (d) {
-                return [arc.centroid(d), arc2.centroid(d)];
-            });
-        }
-        transition.style('visibility', function (d) {
-            if ( d.height && d.height !== 0 ) {
-              return 'hidden';
-            }
-            return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
-        });
+
+//         } else {
+//             transition.attr('points', function (d) {
+//                 return [arc.centroid(d), arc2.centroid(d)];
+//             });
+//         }
+//         transition.style('visibility', function (d) {
+//             if ( d.height && d.height !== 0 ) {
+//               return 'hidden';
+//             }
+//             return getEndAngle(d) - getStartAngle(d) < 0.0001 ? 'hidden' : 'visible';
+//         });
     }
 
-    function updateElements (data, arc) {
-        updateSlicePaths(data, arc);
-        updateLabels(data, arc);
-        updateTitles(data);
-    }
+    function updateElements (slices, labels, polyline, arc, t) {
 
-    function updateSlicePaths (data, arc) {
-        var slicePaths = _g.selectAll('g.' + _sliceCssClass)
-            .data(data)
-            .select('path')
-            .attr('d', function (d, i) {
-                return safeArc(d, i, arc);
-            });
-        var transition = dc.transition(slicePaths, _chart.transitionDuration(), _chart.transitionDelay());
-        if (transition.attrTween) {
-            transition.attrTween('d', tweenFn);
-        }
-        transition.attr('fill', fill);
-    }
-
-    function updateLabels (data, arc) {
-        if (_chart.renderLabel()) {
-            var labels = _g.selectAll('text.' + _labelCssClass)
-                .data(data);
-            positionLabels(labels, arc);
-            if (_externalLabelRadius && _drawPaths) {
-                updateLabelPaths(data, arc);
-            }
-        }
-    }
-
-    function updateTitles (data) {
+        pathTween( slices.select('path'), arc, t );
         if (_chart.renderTitle()) {
-            _g.selectAll('g.' + _sliceCssClass)
-                .data(data)
-                .select('title')
-                .text(function (d) {
-                    return _chart.title()(d.data);
-                });
+            titleSelection( slices.select('title') );
+        }
+        updateLabels(labels, polyline, arc, t);
+    }
+
+    function pathTween ( selection, arc, t ) {
+        selection
+        .transition( t )
+        .attr('fill', fill)
+        .attrTween('d', tweenFn);
+//         function(d) {
+//           return function() {
+//             return safeArc(arc, d);
+//           };
+//         });
+    }
+
+    function updateLabels (labels, polyline, arc, t) {
+        if (_chart.renderLabel()) {
+            positionLabels(labels, arc, t);
+            if (_externalLabelRadius && _drawPaths) {
+                updateLabelPaths( polyline, arc, t);
+            }
         }
     }
 
-    function removeElements (slices, labels) {
-        slices.exit().remove();
-        labels.exit().remove();
+    function removeElements (selection) {
+        selection.exit().remove();
+    }
+
+/**
+    function highlightSlice (i, whether) {
+        _chart.select('g.' + _sliceCssClass + '._' + i)
+            .classed('highlight', whether);
     }
 
     function highlightFilter () {
         if (_chart.hasFilter()) {
             _chart.selectAll('g.' + _sliceCssClass).each(function (d) {
-                if (_chart.isSelectedSlice(d)) {
+                if (_chart.isSelectedElement(d)) {
                     _chart.highlightSelected(this);
                 } else {
                     _chart.fadeDeselected(this);
@@ -5911,7 +5973,7 @@ dc.pieTypeMixin = function (_chart) {
             });
         }
     }
-
+*/
     /**
      * Get or set the external radius padding of the chart. This will force the radius of the
      * chart to become smaller or larger depending on the value.
@@ -6067,30 +6129,6 @@ dc.pieTypeMixin = function (_chart) {
         return _chart;
     };
 
-    function buildArcs () {}
-
-    function buildSliceArcs () {
-        return d3.arc()
-            .startAngle(function (d) {
-                return d.x0;
-            })
-            .endAngle(function (d) {
-                return d.x1;
-            })
-            .innerRadius(function (d) {
-                return d.data.key && d.data.key.length === 1 ? _innerRadius : Math.sqrt(d.y0);
-            })
-            .outerRadius(function (d) {
-                return Math.sqrt(d.y1);
-            });
-    }
-
-    function buildPieArcs () {
-        return d3.arc()
-            .outerRadius(_radius - _externalRadiusPadding)
-            .innerRadius(_innerRadius);
-    }
-
     function sliceTooSmall (d) {
         var angle = ( getEndAngle(d) - getStartAngle(d) );
         return isNaN(angle) || angle < _minAngleForLabel;
@@ -6100,87 +6138,89 @@ dc.pieTypeMixin = function (_chart) {
         return _chart.cappedValueAccessor(d) === 0;
     }
 
-    function tweenFn (d) {}
-
-    function tweenPie (b) {
-        b.innerRadius = _innerRadius;
-        var current = this._current;
-        if (isOffCanvas(current)) {
-            current = {startAngle: 0, endAngle: 0};
-        } else {
-            // only interpolate startAngle & endAngle, not the whole data object
-            current = {startAngle: current.startAngle, endAngle: current.endAngle};
-        }
-        var i = d3.interpolate(current, b);
-        this._current = i(0);
-        return function (t) {
-            return safeArc(i(t), 0, buildArcs());
-        };
-    }
-
-    function tweenSlice (b) {
-        var current = this._current;
-        if (_chart.isOffCanvas(current)) {
-            current = {x: 0, y: 0, dx: 0, dy: 0};
-        }
-        // unfortunately, we can't tween an entire hierarchy since it has 2 way links.
-        var tweenTarget = {x: b.x, y: b.y, dx: b.dx, dy: b.dy};
-        var i = d3.interpolate(current, tweenTarget);
-        this._current = i(0);
-        return function (t) {
-            return safeArc(Object.assign({}, b, i(t)), 0, buildArcs());
-        };
-    }
-
-    function isOffCanvas (d) {
-        if ( _chart.hasOwnProperty('isOffCanvas') ) {
-            return _chart.isOffCanvas(d);
-        }
+    function isOffCanvasPie (d) {
         return !d || isNaN(getStartAngle(d)) || isNaN(getEndAngle(d));
     }
 
-    // from sunburst
-//     function isOffCanvasSlice (d) {
-//         return !d || isNaN(d.dx) || isNaN(d.dy);
-//     }
+    function isOffCanvasSlice (d) {
+        return !d || isNaN(d.x0) || isNaN(d.y0);
+    };
+
 
     function fill (d, i) {
         return _chart.getColor(d.data, i);
     }
 
-    function onClick (d, i) {
-        if (_g.attr('class') !== _emptyCssClass) {
-//             if (chart.hasOwnProperty('__clickHandler')) {
-                 _chart.__clickHandler(d,i);
-//             }
-//             else {
-//                _chart.onClick(d.data, i);
-//             }
-        }
-    }
-
-    function onClickSlice (d, i) {
-        if (_g.attr('class') !== _emptyCssClass) {
-            _chart.__clickHandler(d, i);
-        }
-    }
-
-
-    function safeArc (d, i, arc) {
-        var path = arc(d, i);
+    function safeArc (arc, d) {
+        var path = arc(d);
         if (path.indexOf('NaN') >= 0) {
             path = 'M0,0';
         }
         return path;
     }
 
-    function labelPosition (d, arc) {
+    var startAngleXFn = function (d) {
+        return d.x0;
+    },
+    endAngleXFn = function (d) {
+        return d.x1;
+    },
+    getStartAngle = function (d) {
+        return d.startAngle;
+    },
+    getEndAngle = function (d) {
+        return d.endAngle;
+    },
+
+    tweenFn = function (d) {},
+
+    tweenPie = function (d) {
+        d.innerRadius = _innerRadius;
+        var current = this._current;
+        if (isOffCanvasPie(current)) {
+            current = {startAngle: 0, endAngle: 0};
+        } else {
+            // only interpolate startAngle & endAngle, not the whole data object
+            current = {startAngle: current.startAngle, endAngle: current.endAngle};
+        }
+        var i = d3.interpolate(current, d);
+        this._current = i(0);
+        return function (t) {
+            return safeArc(buildArcs(), i(t));
+        };
+    },
+
+    tweenSlice = function (d) {
+        var current = this._current;
+        if (isOffCanvasSlice(current)) {
+            current = { x0: 0, x1: 0, y0: 0, y1: 0 };
+        }
+        var tweenTarget = {
+            x0: d.x0,
+            x1: d.x1,
+            y0: d.y0,
+            y1: d.y1
+        };
+        var i = d3.interpolate(current, tweenTarget);
+        this._current = i(0);
+        return function (t) {
+           return safeArc(buildArcs(), Object.assign({}, d, i(t)));
+        };
+    },
+
+    onClick = function (d, i) {
+        if (_g.attr('class') !== _emptyCssClass) {
+             _chart.__clickHandler(d,i);
+        }
+    },
+
+    labelPosition = function (d, arc) {
         var centroid;
         if (_externalLabelRadius) {
             centroid = d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
-                .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .centroid( d );
         } else {
             centroid = arc.centroid(d);
         }
@@ -6189,14 +6229,14 @@ dc.pieTypeMixin = function (_chart) {
         } else {
             return 'translate(' + centroid + ')';
         }
-    }
+    },
 
-    function labelPositionSlice (d, arc) {
+    labelPositionSlice = function (d, arc) {
         var centroid;
         if (_externalLabelRadius && d.height === 0) {
             centroid = d3.arc()
-                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .innerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
+                .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius)
                 .centroid( d.hasOwnProperty('x0') ? { startAngle: d.x1, endAngle: d.x0 } : d );
         } else {
             centroid = arc.centroid(d);
@@ -6206,11 +6246,635 @@ dc.pieTypeMixin = function (_chart) {
         } else {
             return 'translate(' + centroid + ')';
         }
+    },
+
+    buildArcs = function () {},
+
+    buildPieArcs = function () {
+        return d3.arc()
+            .innerRadius(_innerRadius)
+            .outerRadius(_radius - _externalRadiusPadding);
+    },
+
+    buildSliceArcs = function () {
+        return d3.arc()
+          .startAngle(function(d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x0)));
+          })
+          .endAngle(function(d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x1)));
+          })
+          .innerRadius(function(d) {
+//               if ( d.data.key && d.data.key.length === 1 ) {
+//                   return _innerRadius;
+//               }
+              return Math.max(0, _chart._d3.scale.y(d.y0));
+          })
+          .outerRadius(function(d) {
+              return Math.max(0, _chart._d3.scale.y(d.y1));
+          });
+    },
+
+    buildPolylineArcs = function () {},
+
+    buildPiePolylineArcs = function () {
+        return d3.arc()
+            .innerRadius(_radius - _externalRadiusPadding)
+            .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius);
+    },
+
+    buildSlicePolylineArcs = function () {
+        return d3.arc()
+            .startAngle(function (d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x0)));
+           })
+            .endAngle(function (d) {
+              return Math.max(0, Math.min(2 * Math.PI, _chart._d3.scale.x(d.x1)));
+            })
+            .innerRadius(_radius - _externalRadiusPadding)
+            .outerRadius(_radius - _externalRadiusPadding + _externalLabelRadius);
+    };
+
+
+    // sunburst only!
+    function collapseClick (d) {
+        node = _chart.collapse(node.id === d.id ? _chart.nodes[0] : d);
     }
+
+    _chart.collapse = function(d) {
+      var xd = d3.interpolate(_chart._d3.scale.x.domain(), [d.x0, d.x1]),
+          yd = d3.interpolate(_chart._d3.scale.y.domain(), [d.y0, 1]),
+          yr = d3.interpolate(_chart._d3.scale.y.range(), [d.y0 ? 20 : _chart.innerRadius(), _chart.radius() - _chart.externalRadiusPadding()]);
+
+        var transn = _chart.svg().transition()
+          .tween("scale", function() {
+            return function(t) {
+              _chart._d3.scale.x.domain(xd(t));
+              _chart._d3.scale.y.domain(yd(t)).range(yr(t)); };
+          });
+          transn.selectAll('path')
+          .attrTween('d', function(d) {
+            return function (t) {
+              return buildArcs()(d);
+            };
+          })
+
+          return d;
+    };
 
     return _chart;
 };
 
+dc.link = {
+  path: {
+    // diagonal line
+    direct: function(){
+      return [];
+    }
+
+    // this is also the default path in radial trees
+    , l_shape: function(x0, y0, x1, y1){
+      return [{ x: x1, y: y0 }];
+    }
+
+    , l_shape_alt: function(x0, y0, x1, y1){
+      return [{ x: x0, y: y1 }];
+    }
+
+    , dogleg: function(x0, y0, x1, y1){
+      return [
+      {   x: x0,
+          y: (y0 + y1) / 2
+      },
+      {   x: (x0 + x1) / 2,
+          y: (y0 + y1) / 2
+      },
+      {   x: x1,
+          y: (y0 + y1) / 2
+      }];
+    }
+
+    , dogleg_alt: function(x0, y0, x1, y1){
+      return [
+      {   x: (x0 + x1) / 2,
+          y: y0
+      },
+      {   x: (x0 + x1) / 2,
+          y: (y0 + y1) / 2
+      },
+      {   x: (x0 + x1) / 2,
+          y: y1
+      }];
+    }
+  }
+  , cartesian: {}
+  , radial: {}
+};
+
+Object.keys(dc.link.path).forEach( function (el) {
+  dc.link.cartesian[el] = function() {
+    return d3.mklink( function( context, x0, y0, x1, y1 ) {
+      var steps = dc.link.path[el](x0, y0, x1, y1);
+      context.moveTo(x0, y0);
+      steps.forEach( function (e) {
+          context.lineTo( e.x, e.y );
+      });
+      context.lineTo( x1, y1 );
+    });
+  };
+  dc.link.radial[el] = function() {
+    return d3.mklink( function( context, x0, y0, x1, y1 ) {
+      var steps = x0 === x1 ? [] : dc.link.path[el](x0, y0, x1, y1),
+      start = d3.pointRadial(x0,y0),
+      prev = { x: x0, y: y0 }
+      context.moveTo(start[0], start[1]);
+      steps.push({ x: x1, y: y1 });
+      steps.forEach( function (e,i) {
+          var pt = d3.pointRadial( e.x, e.y );
+          if ( e.x === prev.x ) {
+            context.lineTo( pt[0], pt[1] );
+          }
+          else {
+            context.arc(0, 0, e.y, prev.x - Math.PI*0.5, e.x - Math.PI*0.5, e.x > prev.x ? 0 : 1);
+          }
+          prev = { x: e.x, y: e.y };
+      });
+    });
+  };
+});
+
+dc.diagonalMixin = function (_chart) {
+
+    var _diagonal;
+
+    _chart.diagonal = function (_) {
+        if (arguments.length === 0) {
+            return _diagonal;
+        }
+        var ptype = 'cartesian';
+
+        if ( _ !== 'curved' ) {
+          if( _chart.radialLayout() ) {
+            ptype = 'radial';
+          }
+          try {
+            if ( _chart.horizontalOrientation() ) {
+                _chart._d3.diagonal = dc.link[ptype][_]()
+                  .x(function(d) { return d.y; })
+                  .y(function(d) { return d.x; });
+            }
+            else {
+              _chart._d3.diagonal = dc.link[ptype][_]()
+                  .x(function(d) { return d.x; })
+                  .y(function(d) { return d.y; });
+            }
+            return _chart;
+          }
+          catch (err) {
+            console.error(err);
+          }
+        }
+
+        if ( _chart.radialLayout() ) {
+          _chart._d3.diagonal = function (d) {
+              return d3.linkRadial()
+            .angle(function(d) { return d.x; })
+            .radius(function(d) { return d.y; })(d);
+          };
+        }
+        else if ( _chart.horizontalOrientation() ) {
+            _chart._d3.diagonal = d3.linkHorizontal()
+              .x(function(d) { return d.y; })
+              .y(function(d) { return d.x; })
+        }
+        else {
+          _chart._d3.diagonal = d3.linkVertical()
+              .x(function(d) { return d.x; })
+              .y(function(d) { return d.y; });
+        }
+        return _chart;
+
+    };
+
+    return _chart;
+};
+
+
+dc.layerMixin = function ( _chart ) {
+
+  _chart._layers = {};
+
+  _chart.layer = function( name, selection, options ) {
+    var _layer;
+    if ( arguments.length === 1 ) {
+      return this._layers[ name ];
+    }
+
+    // we are reattaching a previous layer, which the
+    // selection argument is now set to.
+    if ( arguments.length === 2 ) {
+
+      if ( selection instanceof Layer ||
+      'undefined' !== typeof selection.dataBind &&
+      'undefined' !== typeof selection.insert ) {
+        selection._chart = this;
+        this._layers[ name ] = selection;
+        return this._layers[ name ];
+      }
+      else {
+        dcAssert( false, 'When reattaching a layer, the second argument must be a layer' );
+      }
+    }
+
+    selection._chart = this;
+
+    _layer = new Layer( selection, options );
+
+    _layer.remove = function() {
+      delete _chart._layers[ name ];
+      return this;
+    };
+
+    this._layers[ name ] = _layer;
+
+    return _layer;
+  };
+
+  _chart.drawLayers = function ( data ) {
+    for (var layerName in this._layers) {
+      this._layers[layerName].draw(data);
+    }
+  };
+
+  return _chart;
+};
+
+
+function isSelection (maybe) {
+  return !!(maybe && maybe._groups && maybe._parents);
+}
+
+var lifecycleRe = /^(enter|update|merge|exit)(:transition)?$/;
+
+var dcAssert = function(test, message) {
+  if (test) {
+    return;
+  }
+  throw new Error("[d3.chart] " + message);
+};
+
+var Layer = function (base, options) {
+
+  this._base = base;
+  this._handlers = {};
+
+  if ( options ) {
+    // Set layer methods (required)
+    this.dataBind = options.dataBind;
+    this.insert = options.insert;
+
+    // Bind events (optional)
+    if ( 'events' in options ) {
+      for ( var eventName in options.events ) {
+        this.on( eventName, options.events[ eventName ] );
+      }
+    }
+  }
+};
+
+Layer.prototype.dataBind = function() {
+    dcAssert(false, "Layers must specify a `dataBind` method.");
+  };
+
+Layer.prototype.insert = function() {
+    dcAssert(false, "Layers must specify an `insert` method.");
+  };
+Layer.prototype.on = function(eventName, handler, options) {
+    options = options || {};
+
+    dcAssert(
+      lifecycleRe.test(eventName),
+      "Unrecognized lifecycle event name specified to `Layer#on`: '" +
+      eventName + "'."
+    );
+
+    if (!(eventName in this._handlers)) {
+      this._handlers[eventName] = [];
+    }
+    this._handlers[eventName].push({
+      callback: handler,
+      chart: options.chart || null
+    });
+    return this;
+  };
+
+Layer.prototype.off = function(eventName, handler) {
+
+    var handlers = this._handlers[eventName];
+    var idx;
+
+    dcAssert(
+      lifecycleRe.test(eventName),
+      "Unrecognized lifecycle event name specified to `Layer#off`: '" +
+      eventName + "'."
+    );
+
+    if (!handlers) {
+      return this._base;
+    }
+
+    if (arguments.length === 1) {
+      handlers.length = 0;
+      return this._base;
+    }
+
+    for (idx = handlers.length - 1; idx > -1; --idx) {
+      if (handlers[idx].callback === handler) {
+        handlers.splice(idx, 1);
+      }
+    }
+    return this;
+  };
+
+Layer.prototype.draw = function ( data ) {
+  // 'this' is the layer object
+    var bound, entering, events, selection, method, handlers, eventName, idx,
+      len;
+
+    bound = this.dataBind.call(this._base, data);
+
+    // Although `bound instanceof d3.selection` is more explicit, it fails
+    // in IE8, so we use duck typing to maintain compatability.
+    if (! bound || ! isSelection( bound )) {
+      throw "Invalid selection defined by `Layer#dataBind` method.";
+    }
+    dcAssert(bound.enter, "Layer selection not properly bound.");
+
+    entering = bound.enter();
+    entering._chart = this._base._chart;
+
+    events = [
+      {
+        name: "update",
+        selection: bound
+      },
+      {
+        name: "exit",
+        // Although the `exit` lifecycle event shares its selection object
+        // with the `update` and `merge` lifecycle events, the object's
+        // contents will be modified when d3.chart invokes
+        // `d3.selection.exit`.
+        selection: bound,
+        method: bound.exit
+      },
+      {
+        name: "enter",
+        selection: entering,
+        method: this.insert
+      },
+      {
+        name: "merge",
+        // Although the `merge` lifecycle event shares its selection object
+        // with the `update` lifecycle event, the object's contents will be
+        // modified when d3.chart invokes the user-supplied `insert` method
+        // when triggering the `enter` event.
+        selection: entering.merge(bound)
+      },
+    ];
+
+    for (var i = 0, l = events.length; i < l; ++i) {
+      eventName = events[i].name;
+      selection = events[i].selection;
+      method = events[i].method;
+
+      // Some lifecycle selections modify shared state, so they must be
+      // deferred until just prior to handler invocation.
+      if (typeof method === "function") {
+        selection = method.call(selection, selection);
+      }
+
+      if (selection.empty()) {
+        continue;
+      }
+
+      // Although `selection instanceof d3.selection` is more explicit,
+      // it fails in IE8, so we use duck typing to maintain
+      // compatibility.
+      dcAssert ( selection && isSelection(selection),
+        "Invalid selection defined for '" + eventName + "' lifecycle event.");
+
+      handlers = this._handlers[eventName];
+
+      if (handlers) {
+        for (idx = 0, len = handlers.length; idx < len; ++idx) {
+          console.log( 'running ' + eventName );
+          // Attach a reference to the parent chart so the selection"s
+          // `chart` method will function correctly.
+          selection._chart = handlers[idx].chart || this._base._chart;
+        //  selection.call(handlers[idx].callback, selection);
+          handlers[idx].callback.call(selection);
+        }
+      }
+
+      handlers = this._handlers[eventName + ":transition"];
+
+      if (handlers && handlers.length) {
+        selection = selection.transition();
+        for (idx = 0, len = handlers.length; idx < len; ++idx) {
+          console.log( 'running ' + eventName + ':transition' );
+          selection._chart = handlers[idx].chart || this._base._chart;
+          handlers[idx].callback.call(selection);
+        //  selection.call(handlers[idx].callback, selection);
+        }
+      }
+    }
+  };
+
+
+dc.clusterTreeMixin = function (chart) {
+
+    var counter = 0;
+    chart._d3.transition = d3.transition()
+      .duration( chart.transitionDuration() )
+      .delay( chart.transitionDelay() );
+
+    chart.layers.links = chart.layers.base.append("g").classed("links", true);
+    chart.layers.nodes = chart.layers.base.append("g").classed("nodes", true);
+
+    chart.layer("nodes", chart.layers.nodes, {
+
+      dataBind: function(nodes) {
+        return this.selectAll(".node").data(nodes.descendants(), function(d) {
+          return d._id || (d._id = ++counter);
+        });
+      },
+
+      insert: function() {
+        return this.append("g").classed("node", true);
+      },
+
+      events: {
+        'update': function(){
+          this.classed( 'expandable', function(d){ return d._children; });
+        },
+
+        'enter': function() {
+          this.classed( 'leaf', function(d) { return ! d.children; });
+          this.classed( 'expandable', function(d){ return d._children; });
+
+          this.append("circle")
+            .attr("r", 0);
+
+          this.append("text")
+            .attr("dy", ".35rem")
+            .text(function(d) { return chart.label()(d.data) })
+            .style("fill-opacity", 0);
+
+
+          this.on("click", function(event) { chart.trigger("click:node", event); });
+        },
+
+        'merge': function() {
+          // Set additional node classes as they may change during manipulations
+          // with data. For example, a node is added to another leaf node, so
+          // ex-leaf node should change its class from node-leaf to node-parent.
+          this.classed( "leaf", function(d) { return ! d.children; });
+          this.classed( 'expandable', function(d){ return d._children; });
+        },
+
+        'merge:transition': function() {
+          this.select("circle")
+            .attr("r", chart.nodeMarkerSize() || 6 );
+
+          this.select("text")
+            .style("fill-opacity", 1);
+        },
+
+        "exit:transition": function() {
+          this(chart._d3.transition)
+            .remove();
+
+          this.select("circle")
+            .attr("r", 0);
+
+          this.select("text")
+            .style("fill-opacity", 0);
+        },
+      }
+    });
+
+
+    chart.layer("links", chart.layers.links, {
+
+      dataBind: function(nodes) {
+        return this.selectAll(".link")
+          .data(nodes.links(), function(d) {
+            return d.target._id;
+          });
+      },
+
+      insert: function() {
+        return this.append("path").classed("link", true);
+      },
+
+      events: {
+        "enter": function() {
+          this
+            .attr("d", function(d) {
+              var o = { x: chart.source.x0, y: chart.source.y0 };
+              return chart._d3.diagonal({ source: o, target: o });
+            });
+        },
+
+        "merge:transition": function() {
+          this(chart._d3.transition)
+            .attr("d", chart._d3.diagonal);
+        },
+
+        "exit:transition": function() {
+          this(chart._d3.transition)
+            .attr("d", function(d) {
+              var o = { x: chart.source.x, y: chart.source.y };
+              return chart._d3.diagonal({ source: o, target: o });
+            })
+            .remove();
+        },
+      },
+    });
+  return chart;
+};
+
+dc.clusterTreeCartesianMixin = function (chart) {
+
+    chart.layers.nodes.on("enter", function() {
+      this
+        .attr("transform", function(d) { return "translate(" + chart.source.y0 + "," + chart.source.x0 + ")"; });
+
+      this.select("text")
+        .attr("x", function(d) { return d.children ? -10 : 10; })
+        .attr("text-anchor", function(d) { return d.children ? "start" : "end"; });
+    });
+
+    chart.layers.nodes.on("merge:transition", function() {
+      this
+        .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
+    });
+
+    chart.layers.nodes.on("exit:transition", function() {
+      this
+        .attr("transform", function(d) { return "translate(" + chart.source.y + "," + chart.source.x + ")"; });
+    });
+    return chart;
+};
+
+dc.clusterTreeRadialMixin = function (chart) {
+
+    chart.layers.nodes.on("enter", function() {
+      this
+        .attr("transform", function(d) { return "rotate(" + (chart.source.x0 - 90) + ")translate(" + chart.source.y0 + ")"; });
+
+      this.select("text")
+        .attr("text-anchor", function(d) { return d.x < 180 ? "start" : "end"; })
+        .attr("transform",   function(d) { return d.x < 180 ? "translate(8)" : "rotate(180)translate(-8)"; });
+    });
+
+    chart.layers.nodes.on("merge:transition", function() {
+      this(chart._d3.transition)
+        .attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; });
+    });
+
+    chart.layers.nodes.on("exit:transition", function() {
+      this
+        .attr("transform", function(d) { return "rotate(" + (chart.source.x - 90) + ")translate(" + chart.source.y + ")"; });
+    });
+
+    return chart;
+
+};
+
+dc.orientationMixin = function (_chart) {
+
+    var _horizontalOrientation = false;
+
+    /**
+     * Get or set whether or not the chart displays horizontally. Default is to
+     * display vertically (false).
+     * @method horizontalOrientation
+     * @memberof dc.partitionRectangle
+     * @instance
+     * @param {Boolean} [bool]
+     * @returns {Boolean|dc.partitionRectangle}
+     */
+    _chart.horizontalOrientation = function (bool) {
+      if (!arguments.length) {
+        return _horizontalOrientation;
+      }
+      _horizontalOrientation = bool;
+      return _chart;
+    };
+
+    return _chart;
+};
 /**
  * Hierarchy mixin for hierarchical graphs
  *
@@ -6223,6 +6887,176 @@ dc.pieTypeMixin = function (_chart) {
  * @returns {dc.hierarchyMixin}
  */
 dc.hierarchyMixin = function (_chart) {
+
+    _chart = dc.hierarchyDataMixin(
+      dc.hierarchyFilterMixin(
+        dc.hierarchyClickHandlerMixin(
+          _chart)));
+
+    return _chart;
+};
+
+
+dc.collapsibleMixin = function (_chart) {
+    var _collapsible = false;
+    _chart.collapsible = function(bool) {
+        if (!arguments.length) {
+          return _collapsible;
+        }
+        _collapsible = bool;
+        return _chart;
+    };
+    return _chart;
+};
+
+
+dc.hierarchyDataMixin = function (_chart) {
+
+    /**
+     * Prepare data for hierarchical graphs by formatting it and running it
+     * through the chart layout function
+     *
+     * @method prepareData
+     * @memberof dc.hierarchyDataMixin
+     * @param {Array} [chartData] flat array of chart data objects
+     * @param {Boolean} [emptyChart]
+     * @returns {Object} [dataWithLayout] data formatted using the chart's layout
+     */
+    _chart.prepareData = function ( chartData, emptyChart ) {
+        // stratify the chart data into the appropriate data structure
+        var hierarchicalData = _chart.stratify( chartData ),
+        dataWithLayout;
+        // if we have data...
+        if ( ! emptyChart ) {
+            dataWithLayout = _chart.layoutData( hierarchicalData, _chart.layout() );
+        } else {
+            // just the root node
+            dataWithLayout = _chart.layoutData( [], _chart.layout() );
+        }
+        return dataWithLayout;
+    };
+
+    // formatting data for a hierarchical graph
+    // converts a flat array of data into a hierarchy using the key field
+    // if there are missing parents, _chart.stratify will fill them in
+    /**
+     * Apply a layout to hierarchical data by running it through a supplied layout
+     * function. This function may be overridden in child classes to apply
+     * additional transforms to the laid-out data.
+     *
+     * @method layouData
+     * @memberof dc.hierarchyDataMixin
+     * @param {Object} [hierarchicalData] d3 hierarchy of chart data objects
+     * @param {Function} [layout] function that applies a layout
+     * @returns {Object} [dataWithLayout] data formatted using the chart's layout
+     */
+    _chart.layoutData = function ( hierarchicalData, layout ) {
+        return layout( hierarchicalData );
+    };
+
+    _chart.hasNoData = function ( chartData ) {
+        for (var i = 0; i < chartData.length; i++) {
+            if ( _chart.valueAccessor()( chartData[i] ) !== 0 ) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    /**
+     * Fill in the missing (inferred) ancestors in a hierarchy
+     *
+     * @method createMissingAncestors
+     * @memberof dc.hierarchyMixin
+     * @param {Array} [list] array of data objects
+     * @param {function} [accessor] unique accessor for list items
+     * @returns {Array} [all] array of data objects with all ancestors filled in
+     */
+
+    _chart.createMissingAncestors = function ( list, accessor ) {
+        var all = [];
+        // sort the list
+        var ordered = list.map( function(x){
+          return { data: x, ix: accessor(x).join('\0') };
+        }).sort( function( x, y ) {
+          return x.ix === y.ix ? 0 : x.ix > y.ix;
+        })
+        .map( function(x){
+          return x.data;
+        });
+        var prev = { key: [] };
+        for ( var i = 0; i < ordered.length; i++ ) {
+          var curr = ordered[i];
+          for ( var j = 0; j < curr.key.length - 1; j++ ) {
+            if ( ! prev.key[j] || prev.key[j] !== curr.key[j] ) {
+              for ( var x = 1; x < curr.key.length - j; x ++ ) {
+                all.push( { key: curr.key.slice( 0, j+x ) } );
+              }
+              break;
+            }
+          }
+          prev = ordered[i];
+        }
+        return all.concat(list);
+    };
+
+    /**
+     * Convert a flat set of hierarchical data into a tree using d3.stratify
+     *
+     *
+     * @method stratify
+     * @memberof dc.hierarchyMixin
+     * @param {Array} [list]
+     */
+    _chart.stratify = function ( list ) {
+      var acc = _chart.keyAccessor(),
+      full = _chart.createMissingAncestors( list, acc ),
+      rooted;
+      // try without a root as our data may already be nicely hierarchical
+      try {
+        rooted = d3.stratify()
+          .id( function(d) { return acc(d); } )
+          .parentId( function(d) {
+            return acc(d).slice(0,-1);
+          })
+          ( full );
+        return rooted;
+      }
+      catch(e) {
+//        console.log(e);
+      }
+      // if that did not work, add a fake root.
+      try {
+        rooted = d3.stratify()
+          .id( function(d) { return ['root'].concat(acc(d)); } )
+          .parentId( function(d) {
+            return acc(d).length === 0
+              ? []
+              : ['root'].concat( acc(d).slice(0,-1) );
+          })
+          ( full.concat([{ key: [] }]) );
+        return rooted;
+      }
+      catch(e) {
+        console.log(e);
+      }
+    };
+
+    return _chart;
+};
+
+/**
+ * Filter mixin for hierarchical graphs
+ *
+ * When filtering, the hierarchical chart creates instances of {@link dc.filters.HierarchyFilter HierarchyFilter}.
+ *
+ * @name hierarchyFilterMixin
+ * @memberof dc
+ * @mixin
+ * @param {Object} _chart
+ * @returns {dc.hierarchyFilterMixin}
+ */
+dc.hierarchyFilterMixin = function (_chart) {
 
     // filters for hierarchical graphs
     _chart.filterHandler(function (dimension, filters) {
@@ -6242,9 +7076,9 @@ dc.hierarchyMixin = function (_chart) {
         return filters;
     });
 
-    _chart.isSelectedSlice = function (d) {
+    _chart.isSelectedElement = function (d) {
         return isPathFiltered( d.key );
-    }
+    };
 
     function isPathFiltered (path) {
         for (var i = 0; i < _chart.filters().length; i++) {
@@ -6256,7 +7090,16 @@ dc.hierarchyMixin = function (_chart) {
         return false;
     }
 
-//  returns all filters that are a parent or child of the path
+    /**
+     * Retrieve the filters involving a certain path -- the filters may be a
+     * parent or child of the path.
+     *
+     * @method filtersForPath
+     * @memberof dc.hierarchyFilterMixin
+     * @param {Object} [path]
+     * @returns {Array} [filters] array of filter items
+     */
+
     _chart.filtersForPath = function (path) {
         var pathFilter = dc.filters.HierarchyFilter(path);
         var filters = [];
@@ -6267,139 +7110,87 @@ dc.hierarchyMixin = function (_chart) {
             }
         }
         return filters;
-    }
+    };
 
     /**
-     * Hierarchy click handling
+     * Filter a chart by a data item.
      *
-     * The argument is the data from the item clicked upon; the click handler
-     * checks whether the item is currently filtered or not. Triggers a chart
-     * re-draw.
+     * The argument is the `data` object from the item clicked upon; the function
+     * checks whether the item is currently filtered or not. If the item is not
+     * currently filtered, a new dc.filters.hierarchyFilter is returned.
      *
-     * @method __clickHandler
-     * @memberof dc.hierarchyMixin
+     * @method filterOnDatum
+     * @memberof dc.hierarchyFilterMixin
      * @param {Object} [d]
+     * @returns {dc.filters.hierarchyFilter} [filter]
      */
-
-
-    _chart.__clickHandler = function (d) {
+    _chart.filterOnDatum = function (d) {
         var path = d.key;
         var filter = dc.filters.HierarchyFilter(path);
 
         // filters are equal to, parents or children of the path.
         var filters = _chart.filtersForPath(path);
         var exactMatch = false;
+        var currentFilter;
+
         // clear out any filters that cover the path filtered.
         for (var i = filters.length - 1; i >= 0; i--) {
-            var currentFilter = filters[i];
+            currentFilter = filters[i];
             if (dc.utils.arraysIdentical(currentFilter, path)) {
                 exactMatch = true;
             }
             _chart.filter(filters[i]);
         }
-        dc.events.trigger(function () {
-            // if it is a new filter - put it in.
-            if (!exactMatch) {
-                _chart.filter(filter);
-            }
-            _chart.redrawGroup();
-        });
-    }
-
-    // formatting data for a hierarchical graph
-    // converts a flat array of data into a hierarchy using the key field
-    // if there are missing parents, _chart.stratify will fill them in
-
-    _chart.formatData = function ( chartData, layout ) {
-
-        var cdata = _chart.stratify( chartData, _chart.keyAccessor() );
-        var maxDepth = 0;
-        var nodes = layout(
-            cdata
-              .sum( function(d) {
-                  return _chart._cappedValueAccessor(d) || 0;
-              })
-              .sort(function (a, b) {
-                  return d3.ascending( _chart.ordering()(a), _chart.ordering()(b) );
-              })
-        )
-        .descendants()
-        .map(function (d) {
-            d.key = d.data.key;
-            try {
-                var val = _chart.valueAccessor()(d);
-                d.data.computedValue = val;
-            }
-            catch (e) {
-                d.data.computedValue = d.value;
-            }
-//             if ( ! d.data.value ) {
-//                 d.data.value = d.value;
-//             }
-            if (d.depth > maxDepth) {
-                maxDepth = d.depth;
-            }
-            return d;
-        });
-        _chart.maxDepth = maxDepth;
-        _chart.nodes = nodes;
-        return nodes;
-    };
-
-    /**
-     * Convert a flat set of hierarchical data into a tree using d3.stratify
-     *
-     *
-     * @method stratify
-     * @memberof dc.hierarchyMixin
-     * @param {Array} [list]
-     * @param {Function} [key_acc]
-     */
-    _chart.stratify = function ( list, key_acc ) {
-
-      // if we have data...
-      var extras = []
-      var ordered = list.map( function(x){
-        return { data: x, ix: key_acc(x).join("\0") }
-      }).sort( function( x, y ) {
-        return x.ix === y.ix ? 0 : x.ix > y.ix
-      })
-      .map( function(x){
-        return x.data
-      })
-      var prev = { key: [] }
-      for ( var i = 0; i < ordered.length; i++ ) {
-        var curr = ordered[i]
-        for ( var j = 0; j < curr.key.length - 1; j++ ) {
-          if ( ! prev.key[j] || prev.key[j] !== curr.key[j] ) {
-            for ( var x = 1; x < curr.key.length - j; x ++ ) {
-              extras.push( { key: curr.key.slice( 0, j+x ) } )
-            }
-            // leave the loop
-            break
-          }
+        if (!exactMatch) {
+            return filter;
         }
-        prev = ordered[i];
-      }
-
-      try {
-        var full = extras.concat(list).concat([{ key: [] }]);
-        var rooted = d3.stratify()
-          .id( function(d) { return ['root'].concat(key_acc(d)) } )
-          .parentId( function(d) {
-            return key_acc(d).length == 0
-              ? []
-              : ['root'].concat( key_acc(d).slice(0,-1) )
-          })
-          ( full );
-        return rooted;
-      }
-      catch(e) {
-        console.log(e)
-      }
+        return undefined;
     };
 
     return _chart;
+
+};
+
+/**
+ * ClickHandler mixin for hierarchical graphs
+ *
+ * Generic click handler, suitable for overriding.
+ *
+ * @name hierarchyClickHandlerMixin
+ * @memberof dc
+ * @mixin
+ * @param {Object} _chart
+ * @returns {dc.hierarchyClickHandlerMixin}
+ */
+
+dc.hierarchyClickHandlerMixin = function (_chart) {
+
+    /**
+     * Hierarchy click handling
+     *
+     * Calls `filterOnDatum` from the hierarchyFilterMixin to add/remove the
+     * filter for an item. Triggers the chart group to be redrawn.
+     *
+     * @method __clickHandler
+     * @memberof dc.hierarchyClickHandlerMixin
+     * @param {Object} [d]
+     */
+
+    _chart.__clickHandler = function (d) {
+
+        var new_filter = _chart.filterOnDatum( d );
+
+        dc.events.trigger(function () {
+            // if it is a new filter - put it in.
+            if ( new_filter !== undefined ) {
+                _chart.filter(new_filter);
+            }
+            _chart.redrawGroup();
+        });
+    };
+
+    return _chart;
+
 };
 
 /**
@@ -6415,24 +7206,999 @@ dc.hierarchyMixin = function (_chart) {
  */
 dc.partitionMixin = function (_chart) {
 
-    //
+    var _rootName = 'root',
+    _layoutPadding,
+    _layoutRound;
 
-    _chart.prepareData = function ( chartData, emptyChart ) {
-        var dataWithLayout;
-        // if we have data...
-        if ( ! emptyChart ) {
-            dataWithLayout = _chart.formatData( chartData, _chart.layout() );
-            // partition charts do not need the root node, so shift it off
-            dataWithLayout.shift();
-        } else {
-            // just the root node
-            dataWithLayout = _chart.formatData( [], _chart.layout() );
+
+    // capMixin sets a string 'others' label; to work with hierarchical charts,
+    // it needs to be an array.
+    _chart.othersLabel( [ _chart.othersLabel() ] );
+
+    _chart.layout = function() {
+      var layout = d3.partition();
+      if ( _layoutPadding ) {
+          layout.padding( _layoutPadding );
+      }
+      if ( _layoutRound ) {
+          layout.round( true );
+      }
+      return layout;
+    };
+
+// # partition.round([round]) <>
+//
+// If round is specified, enables or disables rounding according to the given boolean and returns this partition layout. If round is not specified, returns the current rounding state, which defaults to false.
+
+    _chart.layoutRound = function (_) {
+        if (arguments.length === 0) {
+            return _layoutRound;
         }
-        return dataWithLayout;
-    }
+        _layoutRound = _;
+        return _chart;
+    };
+
+// # partition.padding([padding]) <>
+//
+// If padding is specified, sets the padding to the specified number and returns this partition layout. If padding is not specified, returns the current padding, which defaults to zero. The padding is used to separate a node's adjacent children.
+
+    _chart.layoutPadding = function() {
+        if (arguments.length === 0) {
+            return _layoutPadding;
+        }
+        _layoutPadding = _;
+        return _chart;
+    };
+
+    _chart.legendablesData = function() {
+        return _chart.nodes.slice(1) || _chart.data();
+    };
+
+    //  var cdata = _chart.stratify( chartData );
+
+
+    _chart.layoutData = function ( hierarchicalData, layout ) {
+        var nodes = layout(
+            hierarchicalData
+              .sum( function(d) {
+                  try {
+                      return _chart._cappedValueAccessor(d) || 0;
+                  }
+                  catch (e) {
+                      return 0;
+                  }
+              })
+              .sort(function (a, b) {
+                  return d3.ascending( _chart.ordering()(a), _chart.ordering()(b) );
+              })
+        )
+        .descendants()
+        .map(function (d) {
+            d.key = d.data.key;
+//             try {
+//                 var val = _chart.valueAccessor()(d);
+//                 d.data.computedValue = val;
+//             }
+//             catch (e) {
+//                 d.data.computedValue = d.value;
+//             }
+            return d;
+        });
+        _chart.nodes = nodes;
+        return nodes;
+    };
+
+    // Handle cases if value corresponds to generated parent nodes
+    // ensure that titles return some value, rather than 'undefined'
+    dc.override( _chart, 'cappedValueAccessor', function (d) {
+        try {
+            var value = _chart._cappedValueAccessor(d);
+            if ( value ) {
+                return value;
+            }
+            throw 'No value returned';
+        }
+        catch(e) {
+            if (d.data && d.data.key) {
+                return d.value;
+            }
+            return 0;
+        }
+    });
+    dc.override( _chart, 'cappedKeyAccessor', function (d) {
+        var key = _chart._cappedKeyAccessor(d);
+        if ( typeof key === 'string' ) {
+            return [ key ];
+        }
+        if ( key.length > 1 ) {
+            return key.slice(-1)[0];
+        }
+        else if ( key.length === 0 ) {
+            return _rootName;
+        }
+        return key[0];
+    });
+
 
     return _chart;
 };
+
+/**
+ * Cluster chart for hierarchical graphs
+ *
+ *
+ *
+ * @class clusterChart
+ * @memberof dc
+ * @mixes dc.hierarchyMixin
+ * @mixes dc.legendableMixin
+ * @mixes dc.marginMixin
+ * @mixes dc.colorMixin
+ * @mixes dc.baseMixin
+ * @param {Object} _chart
+ * @param {String|node|d3.selection} parent - Any valid
+ * {@link https://github.com/d3/d3-3.x-api-reference/blob/master/Selections.md#selecting-elements d3 single selector} specifying
+ * a dom block element such as a div; or a dom element or d3 selection.
+ * @param {String} [chartGroup] - The name of the chart group this chart instance should be placed in.
+ * Interaction with a chart will only trigger events and redraws within the chart's group.
+ * @returns {dc.clusterChart}
+ **/
+
+dc.clusterSizingMixin = function (_chart) {
+
+    var _nodeSize
+    , _separation
+    , _nodeMarkerSize = 2.5;
+
+/**
+# cluster.size([width, height]) <>
+
+If size is specified, sets this layout's size to the specified two-element array of numbers [width, height] and returns this layout. If size is not specified, returns the current layout size, which defaults to [1, 1]. A layout size of null indicates that a node size will be used instead. The coordinates x and y represent an arbitrary coordinate system; for example, to produce a radial layout, a size of [360, radius] corresponds to a breadth of 360� and a depth of radius.
+*/
+
+/**
+# cluster.nodeSize([size]) <>
+If size is specified, sets this layout's node size to the specified two-element array of numbers [width, height] and returns this cluster layout. If size is not specified, returns the current node size, which defaults to null. A node size of null indicates that a layout size will be used instead. When a node size is specified, the root node is always positioned at <0, 0>.
+*/
+
+    _chart.nodeSize = function (_) {
+        if (arguments.length === 0) {
+            return _nodeSize;
+        }
+        _nodeSize = _;
+        return _chart;
+    };
+
+/**
+
+If separation is specified, sets the separation accessor to the specified function and returns this layout. If separation is not specified, returns the current separation accessor, which defaults to:
+
+function separation(a, b) {
+  return a.parent == b.parent ? 1 : 2;
+}
+The separation accessor is used to separate neighboring leaves. The separation function is passed two leaves a and b, and must return the desired separation. The nodes are typically siblings, though the nodes may be more distantly related if the layout decides to place such nodes adjacent.
+
+*/
+    _chart.separation = function (_) {
+        if (arguments.length === 0) {
+            return _separation;
+        }
+        _separation = _;
+        return _chart;
+    };
+
+/**
+nodeMarkerSize
+
+radius of the symbols used as node markers
+
+defaults to 2.5
+*/
+    _chart.nodeMarkerSize = function (_) {
+        if (arguments.length === 0) {
+            return _nodeMarkerSize;
+        }
+        _nodeMarkerSize = _;
+        return _chart;
+    };
+    return _chart;
+};
+
+dc.radialLayoutMixin = function (_chart) {
+
+    var _radialLayout = false;
+    /**
+     *
+     *
+     * @method radialLayout
+     * @memberof dc.radialLayoutMixin
+     * @instance
+     * @param {Number} [minHeightForLabel=false]
+     * @returns {Number|dc.radialLayoutMixin}
+     */
+    _chart.radialLayout = function (bool) {
+        if (!arguments.length) {
+            return _radialLayout;
+        }
+        _radialLayout = bool;
+        return _chart;
+    };
+
+    return _chart;
+};
+
+dc.clusterChart = function (parent, chartGroup) {
+
+    var _chart = {};
+    ['base', 'color', 'margin', 'legendable', 'orientation', 'hierarchy', 'collapsible', 'radialLayout', 'clusterSizing', 'highlighter', 'diagonal' ].forEach( function(m) {
+        _chart = dc[m + 'Mixin'](_chart);
+    });
+
+    var _layoutType = 'cluster';
+
+    var DEFAULT_MIN_HT_FOR_LABEL = 12;
+
+    var _linkCssClass = 'cluster-link';
+    var _nodeCssClass = 'cluster-node';
+    var _labelCssClass = 'cluster-label';
+    var _linkGroupCssClass = 'cluster-link-group';
+    var _nodeGroupCssClass = 'cluster-node-group'
+    var _labelGroupCssClass = 'cluster-label-group';
+    var _emptyCssClass = 'empty-chart';
+    var _emptyTitle = 'empty';
+
+    var _g;
+    var _minHeightForLabel = DEFAULT_MIN_HT_FOR_LABEL;
+
+    var getTransform
+    , transform = {
+      radial: function ( d ) {
+          return "translate(" + d3.pointRadial(d.x, d.y) + ")";
+      }
+      , h: function ( d ) {
+          return "translate(" + d.y + "," + d.x + ")";
+      }
+      , v: function ( d ) {
+          return "translate(" + d.x + "," + d.y + ")";
+      }
+    };
+
+
+    _chart._highlightableClasses([ 'g.' + _nodeCssClass, 'path.' + _linkCssClass ]);
+    _chart.margins({top: 10, right: 10, bottom: 10, left: 10});
+
+    _chart.colorAccessor(_chart.keyAccessor());
+    _chart.title(function (d) {
+        return _chart.keyAccessor()(d) + ': ' + _chart.valueAccessor()(d);
+    });
+    _chart.label(_chart.keyAccessor());
+    _chart.renderLabel(true);
+    _chart.transitionDuration(350);
+    _chart.transitionDelay(0);
+
+    _chart.onClick = onClick;
+
+    _chart._d3 = {};
+
+    _chart.layoutData = function ( hierarchicalData, layout ) {
+      layout( hierarchicalData );
+      hierarchicalData.descendants()
+      .forEach(function (d) {
+          d.key = d.data.key;
+      });
+      return hierarchicalData;
+    }
+
+    var _cachedData;
+
+    _chart._doRender = function () {
+        initScales();
+        _chart.resetSvg();
+
+        _cachedData = _chart.data();
+
+        _g = _chart.svg()
+            .append('g');
+
+        _chart.layers = { base: _g };
+
+        [ _labelGroupCssClass, _linkGroupCssClass, _nodeGroupCssClass ].forEach( function (e) {
+          _g.append('g').attr('class', e);
+        });
+
+        drawChart();
+
+        return _chart;
+    };
+
+    _chart._doRedraw = function () {
+        drawChart();
+        return _chart;
+    };
+
+    function onClick (d, i) {
+      if (_g.attr('class') !== _emptyCssClass) {
+            _chart.__clickHandler(d, i);
+        }
+    }
+
+    function initLayers() {
+        _chart = dc.clusterTreeMixin(_chart);
+        if ( _chart.radialLayout() ) {
+          _chart = dc.clusterTreeRadialMixin(_chart);
+        }
+        else {
+          _chart = dc.clusterTreeCartesianMixin(_chart);
+        }
+    }
+
+    function initScales() {
+      if ( _chart.radialLayout() ) {
+        getTransform = transform.radial;
+      }
+      else {
+        if ( _chart.horizontalOrientation() ) {
+          getTransform = transform.h;
+        }
+        else {
+          getTransform = transform.v;
+        }
+      }
+    }
+
+    _chart.layout = function () {
+        // set either d3.cluster or d3.tree
+        var layout = d3[_layoutType]();
+        if ( _chart.radialLayout() ) {
+            layout
+            .size([ Math.PI * 2, Math.min( _chart.effectiveHeight(), _chart.effectiveWidth() )/2 ])
+        }
+        else {
+            layout
+            .size([ _chart.effectiveHeight(), _chart.effectiveWidth() ])
+        }
+        if ( _chart.nodeSize() !== undefined ) {
+            layout.nodeSize( _chart.nodeSize() );
+        }
+        if ( _chart.separation() !== undefined ) {
+            layout.separation( _chart.separation() );
+        }
+        return layout;
+    };
+
+    var _filterDisplayed = function (d) {
+        return _chart.valueAccessor()(d) > 0;
+    };
+
+
+    function drawChart() {
+        var chartData = _cachedData.filter(_filterDisplayed);
+        var emptyChart = _chart.hasNoData( chartData );
+        var dataWithLayout = _chart.prepareData( chartData, emptyChart );
+        var i = 0;
+        dataWithLayout.x0 = dataWithLayout.x;
+        dataWithLayout.y0 = dataWithLayout.y;
+
+        _chart.source = dataWithLayout;
+
+        if (_g) {
+            _g.classed(_emptyCssClass, emptyChart);
+
+            // move the base to the appropriate location
+            if ( _chart.radialLayout() ) {
+              _g.attr('transform', 'translate('
+              + ( _chart.margins().left + _chart.effectiveWidth()/2 ) + ','
+              + ( _chart.margins().top + _chart.effectiveHeight()/2 ) + ')');
+            }
+            else {
+              _g.attr('transform', 'translate('
+              + _chart.margins().left + ',' + ( _chart.nodeSize() !== undefined ? _chart.margins().top + _chart.effectiveHeight()/2 : _chart.margins().top ) + ')');
+            }
+
+            var links = _g.select('g.' + _linkGroupCssClass)
+                .selectAll('path.' + _linkCssClass)
+                .data( dataWithLayout.descendants().slice(1), function(d) {
+                  return d.id || (d.id = ++i);
+                });
+
+            var nodes = _g.select('g.' + _nodeGroupCssClass)
+                .selectAll('g.' + _nodeCssClass)
+                .data( dataWithLayout.descendants(), function(d) {
+                  return d.id || (d.id = ++i);
+                });
+
+            if ( _chart.radialLayout() ) {
+              var uniq = {}
+              dataWithLayout.descendants().forEach( function(e) {
+                uniq.hasOwnProperty( e.y ) ? uniq[e.y]++ : uniq[e.y] = 1;
+              });
+
+              var circs = _g.select('g.' + _labelGroupCssClass)
+                .selectAll('circle.circClass')
+                .data( Object.keys(uniq) );
+
+              addCircles( circs, t );
+            }
+
+            var t = d3.transition()
+              .duration( _chart.transitionDuration() )
+              .delay( _chart.transitionDelay() );
+
+            addElements( links, nodes, t );
+
+           _chart._highlightFilter();
+
+            dataWithLayout.each( function(d) {
+              d.x0 = d.x;
+              d.y0 = d.y;
+            });
+
+        }
+    }
+
+    function titleSelection ( selection ) {
+        selection
+        .text(function (d) {
+            return _chart.title()(d.data);
+        });
+    }
+
+    function highlightPaths(d) {
+      // get the parents recursively
+      var ancestors = [ d.id ]
+      while ( d.parent !== null ) {
+        ancestors.push(d.parent.id);
+        d = d.parent;
+      }
+       _g.select('g.' + _linkGroupCssClass)
+          .selectAll('path.' + _linkCssClass)
+          .each( function(n) {
+              if ( ancestors.includes( n.id ) ) {
+                  this.parentNode.append(this)
+                  this.classList.add('toRoot')
+              }
+          });
+    }
+    function dehighlightPaths(d) {
+        _g.select('g.' + _linkGroupCssClass)
+          .selectAll('path.' + _linkCssClass)
+          .classed('toRoot', false)
+    }
+
+    function addCircles ( circs, t ) {
+      circs.exit()
+        .transition(t)
+        .attr("r", 1e-6);
+
+      var circEnter = circs.enter()
+        .append('circle')
+        .attr('r', 1e-6)
+        .attr('class', 'circClass')
+
+      circEnter.merge(circs)
+        .transition(t)
+        .attr('r', function(d) { return d })
+
+    }
+
+    function addElements ( links, nodes, t ) {
+      var nodeExit = nodes.exit()
+        .transition(t);
+
+      nodeExit
+        .attr("transform", function(d) {
+          return getTransform(_chart.source)
+        })
+        .remove();
+
+      nodeExit.select("circle")
+        .attr("r", 1e-6);
+
+      nodeExit.select("text")
+        .style("fill-opacity", 1e-6);
+
+      var nodesEnter = nodes.enter()
+      .append("g")
+      .attr("class", nodeCssClass)
+      .attr("transform", function(d) {
+        return getTransform({ x: _chart.source.x0, y: _chart.source.y0 })
+      })
+      .on('mouseover', highlightPaths)
+      .on('mouseout', dehighlightPaths);
+
+      // circle, cross, diamond, square, star, triangle, wye
+//       d3.symbol()
+//         .type(type)
+//         .size(1)
+
+      var symbolEnter = nodesEnter
+      .append("circle")
+      .attr("r", 1e-6)
+      .on('click', _chart.collapsible() ? collapseClick : onClick )
+
+      nodesEnter
+      .transition(t)
+      .attr("transform", function(d) {
+        return getTransform(d)
+      });
+
+      symbolEnter
+      .transition(t)
+      .attr("r", _chart.nodeMarkerSize() )
+      .style("fill", fill)
+
+
+      if (_chart.renderTitle()) {
+          titleSelection( symbolEnter.append('title') );
+      }
+
+      if ( _chart.renderLabel() ) {
+        nodesEnter
+          .append("text")
+          .attr('class', _labelCssClass)
+          .text( function( d ){ return _chart.label()(d) })
+          .style("fill-opacity", 1e-6)
+          .attr("dy", function(d) { return d.children || d._children ? "-.35em" : ".35em" })
+          .attr("x", function(d) { return d.children || d._children ? -10 : 10; })
+          .style("text-anchor", function(d) { return d.children ? "end" : "start"; })
+      }
+
+      var nodeUpdate = nodes.merge(nodesEnter)
+        .transition(t);
+        nodeUpdate
+          .attr("transform", function(d) {
+              return getTransform(d)
+          });
+
+      nodeUpdate.select("circle")
+          .attr("r", _chart.nodeMarkerSize() )
+          .style("fill", fill)
+
+      nodeUpdate.select("text")
+          .style("fill-opacity", 1)
+
+   // Transition exiting links to the parent's new position.
+      links.exit()
+      .transition(t)
+      .attr("d", function(d) {
+        var o = {x: _chart.source.x, y: _chart.source.y};
+        return _chart._d3.diagonal({source: o, target: o});
+      })
+      .remove();
+
+      // Enter any new links at the parent's previous position.
+      var linksEnter = links.enter().insert("path", "g")
+          .attr("class", _linkCssClass )
+          .attr("d", function(d) {
+            var o = {x: _chart.source.x0, y: _chart.source.y0};
+            return _chart._d3.diagonal({source: o, target: o});
+          })
+
+      // Transition links to their new position.
+      linksEnter.merge(links)
+      .transition(t)
+        .attr("d", function(d) {
+          return _chart._d3.diagonal({ source: d.parent, target: d });
+        });
+    }
+
+    function collapseClick(d) {
+      if( d.children ) {
+        d._children = d.children;
+        d.children = null;
+      } else if( d._children ) {
+        d.children = d._children;
+        d._children = null;
+      }
+      drawChart();
+    }
+
+    function collapse(d) {
+      if ( d.children ) {
+        d._children = d.children;
+        d._children.forEach(collapseClick);
+        d.children = null;
+      }
+      drawChart();
+    }
+
+
+    function nodeCssClass (d, i) {
+        return _nodeCssClass + ' _' + i + ' '
+        + _nodeCssClass + '-level-' + d.depth +
+        ( d.height === 0
+          ? ' leaf'
+          : (d.depth === 0
+            ? ' root'
+            : ' internal') );
+    }
+
+    function fill (d, i) {
+        return _chart.getColor(d.data, i);
+    }
+
+    /**
+     * Title to use for the only slice when there is no data.
+     * @method emptyTitle
+     * @memberof dc.pieTypeMixin
+     * @instance
+     * @param {String} [title]
+     * @returns {String|dc.pieTypeMixin}
+     */
+    _chart.emptyTitle = function (title) {
+        if (arguments.length === 0) {
+            return _emptyTitle;
+        }
+        _emptyTitle = title;
+        return _chart;
+    };
+
+    _chart.layoutType = function (_) {
+        if (arguments.length === 0) {
+            return _layoutType;
+        }
+        if ( _ !== 'cluster' && _ !== 'tree' ) {
+            console.log('Could not set layoutType; permitted values are "cluster" and "tree"');
+            return _chart;
+        }
+        _layoutType = _;
+        return _chart;
+    };
+
+
+    return _chart.anchor(parent, chartGroup);
+};
+
+
+dc.partitionRectangle = function (parent, chartGroup) {
+
+    var _chart = {};
+    ['base', 'color', 'cap', 'margin', 'legendable', 'orientation', 'hierarchy', 'partition', 'highlighter', 'collapsible'].forEach( function(m) {
+        _chart = dc[m + 'Mixin'](_chart);
+    });
+
+    var DEFAULT_MIN_HT_FOR_LABEL = 12;
+
+    var _sliceCssClass = 'partition-slice';
+    var _labelCssClass = 'partition-label';
+    var _sliceGroupCssClass = 'partition-slice-group';
+    var _labelGroupCssClass = 'partition-label-group';
+    var _emptyCssClass = 'empty-chart';
+    var _emptyTitle = 'empty';
+
+    var _g;
+    var _minHeightForLabel = DEFAULT_MIN_HT_FOR_LABEL;
+    var node;
+
+    var dx = function(d){
+      return _chart._d3.scale.x(d.x1) - _chart._d3.scale.x(d.x0);
+    },
+    dy = function(d){
+      return _chart._d3.scale.y(d.y1) - _chart._d3.scale.y(d.y0);
+    },
+    xy = function(d) {
+      return 'translate(' + _chart._d3.scale.x(d.x0) + ',' + _chart._d3.scale.y(d.y0) + ')';
+    },
+    yx = function(d) {
+      return 'translate(' + _chart._d3.scale.x(d.y0) + ',' + _chart._d3.scale.y(d.x0) + ')';
+    },
+    getWidth = dx,
+    getHeight = dy,
+    getTransform = xy;
+
+    _chart.margins({top: 0, right: 0, bottom: 0, left: 0});
+    _chart.sliceCssClass = _sliceCssClass;
+    _chart._highlightableClasses([ 'g.' + _sliceCssClass ]);
+
+    _chart.colorAccessor(_chart.cappedKeyAccessor);
+    _chart.title(function (d) {
+        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
+    });
+    _chart.label(_chart.cappedKeyAccessor);
+    _chart.renderLabel(true);
+    _chart.transitionDuration(350);
+    _chart.transitionDelay(0);
+
+    _chart.onClick = onClick;
+
+    // add a clip-path for the rectangles layer
+/*    function addClipPath( el ) {
+        el
+          .append( 'rect' )
+          .attr( 'x', 0 )
+          .attr( 'y', 0 )
+          .attr( 'width', _chart.effectiveWidth() )
+          .attr( 'height', _chart.effectiveHeight() );
+        return;
+    }
+*/
+    _chart._d3 = {};
+
+    _chart._d3.scale = {
+        x: d3.scaleLinear()
+      , y: d3.scaleLinear()
+      , qtt: d3.scaleLinear()
+      , names: d3.scaleOrdinal()
+    };
+    _chart._d3.transform = function(d, n) { return "translate(8," + (d.x1-d.x0) * n / 2 + ")"; };
+
+
+    // translate the base to the appropriate position
+//     _chart.base
+//       .attr( 'transform', chart.plot_transform() );
+
+    _chart._doRender = function () {
+        _chart.resetSvg();
+
+        if ( _chart.horizontalOrientation() ) {
+          getWidth = dy,
+          getHeight = dx,
+          getTransform = yx;
+        }
+
+        _g = _chart.svg()
+            .append('g');
+
+        _g.append('clipPath')
+          .attr('id', function() {
+              return 'clip-path-' +  _chart.__dcFlag__;
+          })
+          .append( 'rect' )
+          .attr( 'x', 0 )
+          .attr( 'y', 0 )
+          .attr( 'width', _chart.effectiveWidth() )
+          .attr( 'height', _chart.effectiveHeight() );
+
+        _g.append('g')
+            .attr('class', _sliceGroupCssClass)
+            .attr('clip-path', 'url(\'#clip-path-' + _chart.__dcFlag__ + '\')');
+
+        _g.append('g').attr('class', _labelGroupCssClass);
+
+        drawChart();
+
+        return _chart;
+    };
+
+    _chart._doRedraw = function () {
+        drawChart();
+        return _chart;
+    };
+
+    function onClick (d, i) {
+      if (_g.attr('class') !== _emptyCssClass) {
+            _chart.__clickHandler(d, i);
+        }
+    }
+
+//     function transitionEl (duration, delay, el) {
+//         return dc.transition( el, duration, delay );
+//     }
+
+    function drawChart() {
+        var chartData = _chart.data();
+        var emptyChart = true;
+        for (var i = 0; i < chartData.length; i++) {
+            if ( _chart.cappedValueAccessor( chartData[i] ) !== 0 ) {
+                emptyChart = false;
+                break;
+            }
+        }
+
+        var dataWithLayout = _chart.prepareData( chartData, emptyChart );
+        node = dataWithLayout[0];
+
+        _chart._d3.scale.x
+          .range( [ 0, _chart.effectiveWidth() ] )
+        _chart._d3.scale.y
+          .range( [ 0, _chart.effectiveHeight() ] )
+
+        // map y axis values to counts
+        // domain should be the 0 - chart.root_node.count
+//        _chart._d3.scale.qtt.range( [ _chart.effectiveHeight(), 0 ] );
+
+        // map depth to classification category
+//        _chart._d3.scale.names.bandwidth( _chart._d3.scale.x.range() );
+
+        if (_g) {
+            _g.classed(_emptyCssClass, emptyChart);
+
+            var slices = _g.select('g.' + _sliceGroupCssClass)
+                .selectAll('g.' + _sliceCssClass)
+                .data(dataWithLayout);
+
+            var t = d3.transition()
+              .duration( _chart.transitionDuration() )
+              .delay( _chart.transitionDelay() );
+
+            slices.exit()
+              .transition(t)
+              .remove();
+
+            createElements(slices, t);
+
+            updateElements(slices, t);
+
+            _chart._highlightFilter();
+
+            dc.transition(_g,
+              _chart.transitionDuration(),
+              _chart.transitionDelay()
+            )
+            .attr('transform', 'translate(' + _chart.margins().left + ',' + _chart.margins().top + ')');
+        }
+    }
+
+
+    function nodeSliceClass (d, i) {
+        return _sliceCssClass + ' _' + i + ( d.depth ? ' ' + _sliceCssClass + '-level-' + d.depth : '' );
+    }
+
+    function fill (d, i) {
+        return _chart.getColor(d.data, i);
+    }
+
+    function titleSelection ( selection ) {
+        selection
+        .text(function (d) {
+            return _chart.title()(d.data);
+        });
+    }
+
+    function tweenPos ( selection, t ) {
+        selection
+        .transition(t)
+        .attr( 'transform', getTransform );
+    }
+
+    function tweenRect ( selection, t ) {
+        selection.transition(t)
+          .style('opacity', 1)
+          .attr('fill', fill)
+          .attr('width', getWidth)
+          .attr('height', getHeight);
+    }
+
+    function tweenText ( selection, t ) {
+        selection
+          .transition(t)
+          .text( function( d ){ return _chart.label()(d) })
+          .style( 'opacity', function( d ){
+            return getHeight(d) > _chart.minHeightForLabel() ? 1 : 0
+          })
+          .attr( 'transform', function( d ){
+            return 'translate(8,' + (getHeight(d)/2 + 4) + ')';
+          })
+
+    }
+
+    function createElements ( selection, t ) {
+      var selEnter = selection
+        .enter()
+        .append('g')
+        .on('click', _chart.collapsible() ? collapseClick : onClick)
+        .on('mouseover', function (d, i) {
+            _chart._highlightElement(i, true);
+        })
+        .on('mouseout', function (d, i) {
+            _chart._highlightElement(i, false);
+        })
+        .attr('class', nodeSliceClass )
+        .classed( 'leaf', function( d ){
+          return d.height === 0
+        })
+//         .merge(selection)
+//         .transition(t)
+//         .attr('transform', getTransform);
+
+//       tweenPos( selEnter, t );
+      selEnter
+        .transition(t)
+        .attr( 'transform', getTransform );
+
+      if (_chart.renderTitle()) {
+          titleSelection( selEnter.append('title') );
+      }
+
+      tweenRect( selEnter.append( 'rect' )
+        .attr('fill', fill)
+        .style('opacity', 0)
+        .attr('width', 0 )
+        .attr('height', 0 ), t );
+
+      if ( _chart.renderLabel() ) {
+        tweenText( selEnter
+          .append( 'text' )
+          .style( 'opacity', 0 ), t );
+      }
+    }
+
+    function updateElements ( selection, t ) {
+
+      selection
+        .transition(t)
+        .attr( 'transform', getTransform );
+
+      tweenRect( selection.select( 'rect' ), t );
+
+      if ( _chart.renderLabel() ) {
+          tweenText( selection.select( 'text' ), t );
+      }
+
+      if (_chart.renderTitle()) {
+          titleSelection( selection.select('title') );
+      }
+    }
+
+    function collapseClick (d) {
+        console.log( node.id === d.id ? _chart.nodes[0] : d );
+        node = _chart.collapse(node.id === d.id ? _chart.nodes[0] : d);
+        console.log('node now: ' + node.id);
+    }
+
+    _chart.collapse = function(d) {
+        console.log(d.id);
+        _chart._d3.scale.x
+          .domain([ d.x0, d.x1 ])
+          .range([
+            d.x0 ? 20 : 0,
+            d.x1 === 1 ? _chart.effectiveWidth() : _chart.effectiveWidth() - 20
+          ]);
+        _chart._d3.scale.y
+          .domain([d.y0, 1 ])
+          .range([d.y0 ? 20 : 0, _chart.effectiveHeight()]);
+
+        var slices = _g.select('g.' + _sliceGroupCssClass)
+            .selectAll('g.' + _sliceCssClass);
+
+        var t = d3.transition()
+          .duration( _chart.transitionDuration() )
+          .delay( _chart.transitionDelay() );
+
+        updateElements( slices, t );
+
+        return d;
+      };
+
+
+    /**
+     * Get or set the minimum slice height for label rendering. Any slice with a smaller height will not
+     * display a label.
+     * @method minHeightForLabel
+     * @memberof dc.pieTypeMixin
+     * @instance
+     * @param {Number} [minHeightForLabel=12]
+     * @returns {Number|dc.pieTypeMixin}
+     */
+    _chart.minHeightForLabel = function (minHeightForLabel) {
+        if (!arguments.length) {
+            return _minHeightForLabel;
+        }
+        _minHeightForLabel = minHeightForLabel;
+        return _chart;
+    };
+
+    /**
+     * Title to use for the only slice when there is no data.
+     * @method emptyTitle
+     * @memberof dc.pieTypeMixin
+     * @instance
+     * @param {String} [title]
+     * @returns {String|dc.pieTypeMixin}
+     */
+    _chart.emptyTitle = function (title) {
+        if (arguments.length === 0) {
+            return _emptyTitle;
+        }
+        _emptyTitle = title;
+        return _chart;
+    };
+
+    return _chart.anchor(parent, chartGroup);
+
+};
+
+dc.partitionRectangleChart = dc.partitionRectangle;
 
 /**
  * The sunburst chart implementation is usually used to visualize a small tree distribution.  The sunburst
@@ -6447,7 +8213,9 @@ dc.partitionMixin = function (_chart) {
  * @class sunburstChart
  * @memberof dc
  * @mixes dc.partitionMixin
+ * @mixes dc.collapsibleMixin
  * @mixes dc.hierarchyMixin
+ * @mixes dc.pieTypeMixin
  * @mixes dc.legendableMixin
  * @mixes dc.capMixin
  * @mixes dc.colorMixin
@@ -6466,69 +8234,43 @@ dc.partitionMixin = function (_chart) {
  * @returns {dc.sunburstChart}
  **/
 dc.sunburstChart = function (parent, chartGroup) {
-    var _chart =
-      dc.partitionMixin(
-        dc.hierarchyMixin(
-          dc.pieTypeMixin(
-            dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))))))
-      );
+
+    var _chart = {};
+//      =
+//       dc.partitionMixin(
+//         dc.hierarchyMixin(
+//           dc.pieTypeMixin(
+//             dc.legendableMixin(dc.capMixin(dc.colorMixin(dc.baseMixin({}))))))
+//       );
+
+    ['base', 'color', 'cap', 'legendable', 'pieType', 'hierarchy', 'collapsible', 'partition'].forEach( function(m) {
+        _chart = dc[m + 'Mixin'](_chart);
+    });
+
+    _chart.colorAccessor(_chart.cappedKeyAccessor);
+
+    _chart.title(function (d) {
+        return _chart.cappedKeyAccessor(d) + ': ' + _chart.cappedValueAccessor(d);
+    });
+
+    _chart.label(_chart.cappedKeyAccessor);
 
     _chart.tweenType = 'slice';
 
-//     function extendedValueAccessor (d) {
-//        if (d.data.key) {
-//             return d.value;
-//         }
-//         return _chart.cappedValueAccessor(d);
-//     }
-
-//     _chart.cappedValueAccessor = function (d, i) {
-//         if (d.others) {
-//             return d.value;
-//         }
-//         return _chart.valueAccessor()(d, i);
-//     };
-    // Handle cases if value corresponds to generated parent nodes
-    // ensure that titles return some value, rather than 'undefined'
-    dc.override( _chart, 'cappedValueAccessor', function (d) {
-        try {
-            var value = _chart._cappedValueAccessor(d);
-            if ( value ) {
-                return value;
-            }
-            throw "No value returned";
-        }
-        catch(e) {
-            if (d.data && d.data.key) {
-                return d.value;
-            }
-            else if ( d.computedValue ) {
-                return d.computedValue;
-            }
-            return 0;
-        }
-    });
-
-    dc.override( _chart, 'cappedKeyAccessor', function (d) {
-        var key = _chart._cappedKeyAccessor(d);
-        if ( key.length > 1 ) {
-            return key.slice(-1)[0];
-        }
-        return key[0];
-    });
-
-    _chart.layout = function () {
-        return d3.partition()
-            .size([2 * Math.PI, (_chart.radius() - _chart.externalRadiusPadding() ) * (_chart.radius() - _chart.externalRadiusPadding() ) ]);
-    }
-
-    _chart.isOffCanvas = function (d) {
-        return !d || isNaN(d.dx) || isNaN(d.dy);
-    }
+    _chart._d3 = {
+      scale: {
+        x: d3.scaleLinear()
+          .range([0, 2 * Math.PI]).clamp(true)
+        , y: d3.scaleLinear()
+      }
+    };
 
     return _chart.anchor(parent, chartGroup);
+
 };
 
+
+dc.partitionArc = dc.sunburstChart;
 /**
  * Concrete bar chart/histogram implementation.
  *

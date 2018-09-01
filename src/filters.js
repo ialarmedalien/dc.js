@@ -149,7 +149,6 @@ dc.filters.HierarchyFilter = function (path) {
                 return false;
             }
         }
-        console.log("Filter ON for value " + value.join(","))
         return true;
     };
     return filter;

@@ -53,47 +53,27 @@ function loadDateFixture () {
     return fixture;
 }
 
-function addDomParts (id) {
-    var div = appendChartID(id);
-    div.append('a')
-        .attr('class', 'reset')
-        .style('display', 'none')
-        .attr('href', 'javascript:spenderRowChart.filterAll();dc.redrawAll();');
-    div.append('span').attr('class', 'filter').style('display', 'none');
-}
-
-function addOtherDomParts (id, chart) {
-    var div = d3.select('#' + id);
-    div.append('a')
-        .attr('class', 'reset')
-        .style('display', 'none')
-        .attr('href', 'javascript:' + chart + '.filterAll();dc.redrawAll();');
-    div.append('span').attr('class', 'filter').style('display', 'none');
-
-}
-
 function buildChart (id) {
-    addDomParts(id);
-    var chart = dc.sunburstChart('#' + id);
-    chart.dimension(countryRegionStateDimension).group(countryRegionStateGroup)
-        .width(width)
-        .height(height)
-        .drawPaths(drawPaths);
+    var div = appendChartID(id);
+    var ch = dc.partitionArc('#' + id);
+//    div.append('a').attr('class', 'reset');
+    div.append('p')
+        .attr('class', 'filter');
+    return ch;
+}
 
-    if ( extLabelPad ) {
-        chart.externalLabels(extLabelPad);
-
-    }
-
-    if ( extRadPad ) {
-        chart.externalRadiusPadding(extRadPad);
-    }
-
-    if ( legend ) {
-        chart.legend(legend);
-    }
-    chart.render();
-    return chart;
+var max = 5;
+var i = 0;
+var chart_arr = [];
+while (i < max) {
+  d3.select('#test-content')
+    .append('div')
+    .attr('id', 'test' + i )
+    .classed('floatL', true)
+    .append('p')
+    .classed('filter', true);
+  chart_arr.push( dc['partition' + ( i <= 3 ? 'Arc' : 'Rectangle' ) ]('#test' + i) );
+  i++;
 }
 
 
@@ -110,6 +90,7 @@ var countryRegionStateDimension, countryRegionStateGroup;
 var statusDimension;
 var dateDimension;
 var statusGroup, statusMultiGroup;
+var arrValueDimension;
 
 data = crossfilter(loadDateFixture());
 valueDimension = data.dimension(function (d) {
@@ -117,11 +98,13 @@ valueDimension = data.dimension(function (d) {
 });
 valueGroup = valueDimension.group();
 
+arrValueDimension = data.dimension(function (d) {
+    return [ d.value ];
+});
+
 countryRegionStateDimension = data.dimension(function (d) {
     return [d.countrycode, d.region, d.state];
 });
-
-countryRegionStateGroup = countryRegionStateDimension.group();
 
 statusDimension = data.dimension(function (d) {
     return d.status;
@@ -151,18 +134,72 @@ statusMultiGroup = statusGroup.reduce(
     }
 );
 
-var chart = buildChart('burst1');
-    addOtherDomParts('burst1', chart);
-    chart.render();
-    legend = dc.legend();
-    extLabelPad = 50;
-    extRadPad = 100;
-    drawPaths = true;
-var chart2 = buildChart('burst2');
-    chart2.render();
-var chart3 = buildChart('burst3');
-//    statusDimension.filter('E');
-    chart3.render();
+    chart_arr[0]
+        .dimension(countryRegionStateDimension)
+        .group(countryRegionStateDimension.group())
+        .width(width)
+        .height(height)
+        .drawPaths(drawPaths);
+
+    chart_arr[1]
+        .dimension(valueDimension)
+        .group(valueDimension.group().reduceCount())
+//        .dimension(countryRegionStateDimension)
+//         .group(countryRegionStateGroup)
+        .width(width)
+        .height(height)
+        .externalLabels(50)
+        .externalRadiusPadding(100)
+        .drawPaths(true)
+        .legend(dc.legend());
+
+    chart_arr[2]
+        .dimension(arrValueDimension)
+        .group(arrValueDimension.group().reduceCount())
+        .width(width)
+        .height(height)
+        .radius(radius)
+        .transitionDuration(0)
+        .externalLabels(10)
+        .drawPaths(true)
+        .render();
+
+    chart_arr[3]
+        .dimension(countryRegionStateDimension)
+        .group(countryRegionStateDimension.group())
+        .width(width)
+        .height(height)
+        .externalLabels(50)
+        .externalRadiusPadding(100)
+        .drawPaths(true)
+        .legend(dc.legend());
+//     statusDimension.filter('E');
+
+    chart_arr[4]
+        .dimension(countryRegionStateDimension)
+        .group(countryRegionStateDimension.group())
+        .width(width)
+        .height(height)
+        .transitionDuration(0);
+
+    dc.renderAll();
+
+    var dims = { width: {}, height: {}, n: 0 };
+    d3.select('#test4').selectAll('.partition-slice rect').each(function(){
+        var el = this;
+        dims.n++;
+        [ 'width', 'height' ].forEach( function(prop) {
+            var val = Math.round( d3.select(this).attr(prop) );
+            if ( ! dims[prop].hasOwnProperty( val ) ) {
+                dims[prop][val] = 1;
+            }
+            else {
+                dims[prop][val]++;
+            }
+        }, el );
+    });
+    console.log( dims );
+
 
 </script>
 
